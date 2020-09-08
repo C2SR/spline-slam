@@ -19,6 +19,9 @@ def main():
     total_angular_error = 0.
     total_translation_error = 0.
 
+
+
+
     for relations_data in relations_file_handle:
         ######### Collecting data from log ##########
         relations_data = np.fromstring(relations_data, dtype=np.float, sep=' ' )
@@ -26,6 +29,8 @@ def main():
         timestamp_final = relations_data[1]
 
         # Search same time interval in the SLAM file
+        pose_init = None 
+        pose_final = None
         for slam_data in slam_file_handle:
             slam_data = np.fromstring(slam_data, dtype=np.float, sep=' ' )  
             timestamp = slam_data[0]
@@ -47,15 +52,14 @@ def main():
         while slam_relative_pose[2] < -np.pi:
             slam_relative_pose[2] += 2*np.pi                    
         relative_angular_error = relations_relative_pose[2] - slam_relative_pose[2]
+        
 
         total_translation_error += np.abs(relative_translation_error)
         total_angular_error += np.abs(relative_angular_error)
 
         print(counter, relative_translation_error, relative_angular_error, relations_relative_pose[2], slam_relative_pose[2])
         counter = counter + 1
-        pose_init = None 
-        pose_final = None
-
+ 
 
     print('----------------------------')
     print(total_translation_error, total_angular_error)                              
