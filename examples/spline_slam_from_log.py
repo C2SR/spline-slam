@@ -3,6 +3,8 @@ from matplotlib import pyplot as plt
 
 from spline_slam.spline import SplineLocalization
 from spline_slam.spline import SplineMap
+from spline_slam.spline import CubicSplineSurface
+
 
 import sys
 import time
@@ -18,10 +20,11 @@ def main():
     # Instantiating the grid map object
     multi_res_localization = {}
     multi_res_mapping = {}
+    multi_res_map = {}
     nb_resolution = 3
     for res in range(0,nb_resolution):
         kwargs_spline= {'knot_space': .05*(2.**(nb_resolution-res-1)), 
-                        'map_size': np.array([150.,150.]),
+                        'surface_size': np.array([150.,150.]),
                         'min_angle': -90*np.pi/180., # -130*np.pi/180,
                         'max_angle': 90*np.pi/180., #129.75*np.pi/180,
                         'angle_increment': 1.*np.pi/180., #.25*np.pi/180,
@@ -34,9 +37,10 @@ def main():
                         'nb_iteration_max': 50,
                         'max_nb_rays': 361,
                         'alpha': 1}
-
-        multi_res_localization[res] = SplineLocalization(**kwargs_spline)
-        multi_res_mapping[res] = SplineMap(**kwargs_spline)
+        
+        multi_res_map[res] = CubicSplineSurface(**kwargs_spline)
+        multi_res_localization[res] = SplineLocalization(multi_res_map[res], **kwargs_spline)
+        multi_res_mapping[res] = SplineMap(multi_res_map[res], **kwargs_spline)
     # Opening log file
     file_handle = open(file_name, "r")
     # Retrieving sensor parameters
@@ -127,7 +131,7 @@ def main():
                     previous_timestamp = timestamp
                 else:
                     pose_estimative = np.copy(multi_res_localization[res-1].pose)
-                multi_res_localization[res].update_localization(multi_res_mapping[res], ranges, pose_estimative, unreliable_odometry)
+                multi_res_localization[res].update_localization(ranges, pose_estimative, unreliable_odometry)
                 unreliable_odometry = False
 
         ############# Mapping ################
@@ -142,18 +146,18 @@ def main():
         for res in range(0, nb_resolution):
             mapping_time += np.sum(multi_res_mapping[res].time)
             localization_time += np.sum(multi_res_localization[res].time)
-  
-        pose = np.array(multi_res_localization[nb_resolution-1].pose)
         #print(timestamp, pose[0], pose[1], pose[2])
         print( num, 
             1./(mapping_time/num), 
             1./(localization_time/num), 
             1./(mapping_time/num + localization_time/num) ) 
 
+        
+
         ########## Plotting #################
-        if (frame_counter > 0  and (num == 7373 or num == 1987 or num==13630 or num==4933 or num==7060)) or (frame_counter> 20):          
+        if (frame_counter > 0  and (num == 7373 or num == 1987 or num==13630 or num==4933 or num==7060)) or (frame_counter> 200):          
             offset = nb_resolution-nb_resolution_plot
-            if frame_nb < 265:
+            if frame_nb < -1:
                 frame_nb +=1
                 frame_counter = 0
                 # Update path

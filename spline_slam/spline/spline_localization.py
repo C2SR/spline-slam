@@ -3,9 +3,8 @@ import math
 import time
 
 class SplineLocalization:
-    def __init__(self, **kwargs):
+    def __init__(self, spline_map, **kwargs): 
         # Parameters
-        knot_space = kwargs['knot_space'] if 'knot_space' in kwargs else .05
         min_angle = kwargs['min_angle'] if 'min_angle' in kwargs else 0.
         max_angle = kwargs['max_angle'] if 'max_angle' in kwargs else 2.*np.pi 
         angle_increment = kwargs['angle_increment'] if 'angle_increment' in kwargs else 1.*np.pi/180.
@@ -17,11 +16,8 @@ class SplineLocalization:
         nb_iteration_max = kwargs['nb_iteration_max'] if 'nb_iteration_max' in kwargs else 10
         alpha = kwargs['alpha'] if 'alpha' in kwargs else 2
 
-        # Spline-map parameters
-        self.degree = 3
-        self.knot_space = knot_space
-
         # LogOdd Map parameters
+        self.map = spline_map
         self.logodd_min_free = logodd_min_free
         self.logodd_max_occupied = logodd_max_occupied
 
@@ -64,151 +60,8 @@ class SplineLocalization:
         R = np.array([[c, -s],[s, c]])
         return np.matmul(R, local) + pose[0:2].reshape(2,1)
     
-    """ Compute spline coefficient index associated to the sparse representation """
-    def compute_sparse_spline_index(self, tau, origin):
-        mu    = -(np.ceil(-tau/self.knot_space).astype(int)) + origin
-        c = np.zeros([len(tau),(self.degree+1)],dtype='int')
-        for i in range(0, self.degree+1):
-            c[:,i] = mu-self.degree+i
-        return c
-
-    """ Compute spline tensor coefficient index associated to the sparse representation """
-    def compute_sparse_tensor_index(self, map, pts):
-        # Compute spline along each axis
-        cx = self.compute_sparse_spline_index(pts[0,:], map.grid_center[0,0])
-        cy = self.compute_sparse_spline_index(pts[1,:], map.grid_center[1,0])
-
-        # Kronecker product for index
-        c = np.zeros([cx.shape[0],(self.degree+1)**2],dtype='int')
-        for i in range(0, self.degree+1):
-            for j in range(0, self.degree+1):
-                c[:,i*(self.degree+1)+j] = cy[:,i]*(map.grid_size[0,0])+cx[:,j]
-        return c
-
-    """"Compute spline coefficients - 1D function """
-    def compute_spline_order(self, tau, origin, ORDER=0):
-        tau_bar = (tau/self.knot_space + origin) % 1 
-        tau_3 = tau_bar + 3
-        tau_2 = tau_bar + 2        
-        tau_1 = tau_bar + 1
-        tau_0 = tau_bar
-        
-        b = np.zeros([len(tau),self.degree+1])
-        b[:,0] = 1/(6)*(-tau_3**3 + 12*tau_3**2 - 48*tau_3 + 64) 
-        b[:,1] = 1/(6)*(3*tau_2**3 - 24*tau_2**2 + 60*tau_2 - 44)
-        b[:,2] = 1/(6)*(-3*tau_1**3 + 12*tau_1**2 - 12*tau_1 + 4)
-        b[:,3] = 1/(6)*(tau_0**3)
-
-        if ORDER == 1:
-            # 1st derivative of spline
-            db = np.zeros([len(tau),self.degree+1]) 
-            db[:,0] = 1/(6)*(-3*tau_3**2 + 24*tau_3 - 48 ) * (1./self.knot_space) 
-            db[:,1] = 1/(6)*(9*tau_2**2 - 48*tau_2 + 60 ) * (1./self.knot_space)
-            db[:,2] = 1/(6)*(-9*tau_1**2 + 24*tau_1 - 12) * (1./self.knot_space)
-            db[:,3] = 1/(6)*(3*tau_0**2) * (1./self.knot_space)
-            return b, db
-        else:
-            return b, -1 
-
-    """"Compute spline tensor coefficients - 2D function """
-    def compute_tensor_spline_order(self, map, pts, ORDER=0):
-        # Storing number of points
-        nb_pts = pts.shape[1]
-
-        # Compute spline along each axis
-        bx, dbx = self.compute_spline_order(pts[0,:], map.grid_center[0,0], ORDER)
-        by, dby = self.compute_spline_order(pts[1,:], map.grid_center[1,0], ORDER)
-
-        # Compute spline tensor
-        B = np.zeros([nb_pts,(self.degree+1)**2])
-        for i in range(0,self.degree+1):
-            for j in range(0,self.degree+1):           
-                B[:,i*(self.degree+1)+j] = by[:,i]*bx[:,j]
-
-
-        if ORDER ==1:
-            dBx = np.zeros([nb_pts,(self.degree+1)**2])
-            dBy = np.zeros([nb_pts,(self.degree+1)**2])        
-            for i in range(0,self.degree+1):
-                for j in range(0,self.degree+1):           
-                    dBx[:,i*(self.degree+1)+j] = by[:,i]*dbx[:,j]
-                    dBy[:,i*(self.degree+1)+j] = dby[:,i]*bx[:,j]
-            return B, dBx, dBy
-
-        return B, -1
-
-    """"Compute spline coefficients - 1D function """
-    def compute_spline(self, tau, origin):
-        # Number of points
-        nb_pts = len(tau)
-        # Normalize regressor
-        mu    = -(np.ceil(-tau/self.knot_space).astype(int)) + origin
-        tau_bar = (tau/self.knot_space + origin) % 1 
-
-        # Compute spline function along the x-axis        
-        tau_3 = tau_bar + 3
-        tau_2 = tau_bar + 2        
-        tau_1 = tau_bar + 1
-        tau_0 = tau_bar
-
-        # Spline
-        b = np.zeros([nb_pts,self.degree+1])
-        b[:,0] = 1/(6)*(-tau_3**3 + 12*tau_3**2 - 48*tau_3 + 64) 
-        b[:,1] = 1/(6)*(3*tau_2**3 - 24*tau_2**2 + 60*tau_2 - 44)
-        b[:,2] = 1/(6)*(-3*tau_1**3 + 12*tau_1**2 - 12*tau_1 + 4)
-        b[:,3] = 1/(6)*(tau_0**3)
-
-        # 1st derivative of spline
-        db = np.zeros([nb_pts,self.degree+1])
-        db[:,0] = 1/(6)*(-3*tau_3**2 + 24*tau_3 - 48 ) * (1/self.knot_space) 
-        db[:,1] = 1/(6)*(9*tau_2**2 - 48*tau_2 + 60 ) * (1/self.knot_space)
-        db[:,2] = 1/(6)*(-9*tau_1**2 + 24*tau_1 - 12) * (1/self.knot_space)
-        db[:,3] = 1/(6)*(3*tau_0**2) * (1/self.knot_space)
-
-        # 2nd derivative of spline
-        ddb = np.zeros([nb_pts,self.degree+1])
-        ddb[:,0] = 1/(6)*(-6*tau_3 + 24) * (1/self.knot_space**2)
-        ddb[:,1] = 1/(6)*(18*tau_2 - 48) * (1/self.knot_space**2)
-        ddb[:,2] = 1/(6)*(-18*tau_1 + 24) * (1/self.knot_space**2)
-        ddb[:,3] = 1/(6)*(6*tau_0) * (1/self.knot_space**2)
-
-        c = np.zeros([nb_pts,(self.degree+1)],dtype='int')
-        for i in range(0, self.degree+1):
-            c[:,i] = mu-self.degree+i
-
-        return c, b, db, ddb
-
-    """"Compute spline tensor coefficients - 2D function """
-    def compute_tensor_spline(self, map, pts):
-        # Storing number of points
-        nb_pts = pts.shape[1]
-
-        # Compute spline along each axis
-        cx, bx, dbx, ddbx  = self.compute_spline(pts[0,:], map.grid_center[0,0])
-        cy, by, dby, ddby  = self.compute_spline(pts[1,:], map.grid_center[1,0])
-
-        # Compute spline tensor
-        ctrl_pt_index = np.zeros([nb_pts,(self.degree+1)**2],dtype='int')
-        B = np.zeros([nb_pts,(self.degree+1)**2])
-        dBx = np.zeros([nb_pts,(self.degree+1)**2])
-        dBy = np.zeros([nb_pts,(self.degree+1)**2])
-        ddBx = np.zeros([nb_pts,(self.degree+1)**2])
-        ddBy = np.zeros([nb_pts,(self.degree+1)**2])
-        ddBxy = np.zeros([nb_pts,(self.degree+1)**2])       
-        for i in range(0,self.degree+1):
-            for j in range(0,self.degree+1):           
-                ctrl_pt_index[:,i*(self.degree+1)+j] = cy[:,i]*(map.grid_size[0,0])+cx[:,j]
-                B[:,i*(self.degree+1)+j] = by[:,i]*bx[:,j]
-                dBx[:,i*(self.degree+1)+j] = by[:,i]*dbx[:,j]
-                dBy[:,i*(self.degree+1)+j] = dby[:,i]*bx[:,j]
-                ddBx[:,i*(self.degree+1)+j] = by[:,i]*ddbx[:,j]
-                ddBy[:,i*(self.degree+1)+j] = ddby[:,i]*bx[:,j]
-                ddBxy[:,i*(self.degree+1)+j] = dby[:,i]*dbx[:,j]                                
-
-        return ctrl_pt_index, B, dBx, dBy, ddBx, ddBy, ddBxy
-
     """ Estimate pose (core function) """
-    def compute_pose(self, map, pose_estimate, pts_occ_local, nb_iteration_max, gradient_step_size = .1):
+    def compute_pose(self, map, pose_estimate, pts_occ_local, nb_iteration_max, gradient_step_size = 0.1):
         # Initializing parameters
         nb_iterations = 0.
         residue = np.inf
@@ -221,8 +74,8 @@ class SplineLocalization:
         while (np.abs(residue) > .0001) and nb_iterations < nb_iteration_max:
             if has_updated:
                 df, cost = self.compute_pose_increment(map, pts_occ_local, pose_estimate, alpha=alpha, c=self.c)
-                if np.linalg.norm(df[0:2]) > self.knot_space:
-                    df = self.knot_space*df/np.linalg.norm(df[0:2])
+                if np.linalg.norm(df[0:2]) > self.map.knot_space:
+                    df = self.map.knot_space*df/np.linalg.norm(df[0:2])
 
             # Compute pose 
             delta_pose = gradient_step_size*df
@@ -231,7 +84,7 @@ class SplineLocalization:
             residue =  cost - cost_candidate
 
             if residue > 0 :
-                gradient_step_size = 1.25*gradient_step_size
+                gradient_step_size = 2.25*gradient_step_size
                 pose_estimate = pose_estimate_candidate
                 cost = cost_candidate
                 has_updated = True
@@ -247,9 +100,9 @@ class SplineLocalization:
     def cost_function(self, map, pts_occ_local, pose, alpha, c):
         # computing alignment error
         pts_occ = self.local_to_global_frame(pose, pts_occ_local)
-        c_index_occ = self.compute_sparse_tensor_index(map, pts_occ)
-        B_occ, _ = self.compute_tensor_spline_order(map, pts_occ, ORDER=0)        
-        s_occ = np.sum(map.ctrl_pts[c_index_occ]*B_occ, axis=1)        
+        c_index_occ = self.map.compute_sparse_tensor_index(pts_occ)
+        B_occ, _, _ = self.map.compute_tensor_spline(pts_occ, ORDER=0x01)        
+        s_occ = np.sum(self.map.ctrl_pts[c_index_occ]*B_occ, axis=1)        
         e_occ = (1 - s_occ/self.logodd_max_occupied)
 
         if alpha == 2:   # squared error (L2) loss function
@@ -267,11 +120,11 @@ class SplineLocalization:
         # Transforming occupied points to global frame
         pts_occ_global = self.local_to_global_frame(pose, pts_occ_local)
         # Spline tensor
-        c_index_occ = self.compute_sparse_tensor_index(map, pts_occ_global)
-        B_occ, dBx_occ, dBy_occ = self.compute_tensor_spline_order(map, pts_occ_global, ORDER=1)                
+        c_index_occ = self.map.compute_sparse_tensor_index(pts_occ_global)
+        B_occ, dBx_occ, dBy_occ = self.map.compute_tensor_spline(pts_occ_global, ORDER=0x01 | 0x02)                
         #c_index_occ, B_occ, dBx_occ, dBy_occ, ddBx_occ, ddBy_occ, ddBxy_occ = self.compute_tensor_spline(map, pts_occ_global)
         # Current value on the map
-        s_occ = np.sum(map.ctrl_pts[c_index_occ]*B_occ, axis=1) 
+        s_occ = np.sum(self.map.ctrl_pts[c_index_occ]*B_occ, axis=1) 
         # Alginment error
         e_occ = (1 - (s_occ/self.logodd_max_occupied))            
         n_occ = len(e_occ)
@@ -280,8 +133,8 @@ class SplineLocalization:
         R = np.array([[-sin, -cos],[cos, -sin]])           
         # compute H and b  
         ds_occ = np.zeros([2, n_occ])
-        ds_occ[0,:]=np.sum(map.ctrl_pts[c_index_occ]*dBx_occ, axis=1)
-        ds_occ[1,:]=np.sum(map.ctrl_pts[c_index_occ]*dBy_occ, axis=1)
+        ds_occ[0,:]=np.sum(self.map.ctrl_pts[c_index_occ]*dBx_occ, axis=1)
+        ds_occ[1,:]=np.sum(self.map.ctrl_pts[c_index_occ]*dBy_occ, axis=1)
         dpt_occ_local = R@pts_occ_local
     
         # JAcobian
@@ -338,7 +191,8 @@ class SplineLocalization:
 
 
     """"Occupancy grid mapping routine to update map using range measurements"""
-    def update_localization(self, map, ranges, pose_estimative=None, unreliable_odometry=True):
+    def update_localization(self, ranges, pose_estimative=None, unreliable_odometry=True):
+        map = None
         if pose_estimative is None:
             pose_estimative = np.copy(self.pose)
         # Removing spurious measurements
