@@ -208,21 +208,21 @@ class SplineLocalization:
         return ctrl_pt_index, B, dBx, dBy, ddBx, ddBy, ddBxy
 
     """ Estimate pose (core function) """
-    def compute_pose(self, map, pose_estimate, pts_occ_local, nb_iteration_max, gradient_step_size = .5):
+    def compute_pose(self, map, pose_estimate, pts_occ_local, nb_iteration_max, gradient_step_size = .1):
         # Initializing parameters
         nb_iterations = 0.
         residue = np.inf
  
-        alpha = -np.inf
-        self.c = 2./3 
+        alpha = 2.
+        self.c = 1. #1 #2./3 #/3
 
         has_updated = True
         nb_updates = 0
-        while (np.abs(residue) > .0005) and nb_iterations < nb_iteration_max:
+        while (np.abs(residue) > .0001) and nb_iterations < nb_iteration_max:
             if has_updated:
                 df, cost = self.compute_pose_increment(map, pts_occ_local, pose_estimate, alpha=alpha, c=self.c)
-                if np.linalg.norm(df[0:2]) > .5*self.knot_space:
-                    df = .5*df/np.linalg.norm(df)
+                if np.linalg.norm(df[0:2]) > self.knot_space:
+                    df = self.knot_space*df/np.linalg.norm(df[0:2])
 
             # Compute pose 
             delta_pose = gradient_step_size*df
@@ -231,7 +231,7 @@ class SplineLocalization:
             residue =  cost - cost_candidate
 
             if residue > 0 :
-                gradient_step_size *= 1.25
+                gradient_step_size = 1.25*gradient_step_size
                 pose_estimate = pose_estimate_candidate
                 cost = cost_candidate
                 has_updated = True
@@ -241,7 +241,7 @@ class SplineLocalization:
             else:
                 gradient_step_size /= 4
                 has_updated = False
-                    
+
         return pose_estimate, cost, gradient_step_size
 
     def cost_function(self, map, pts_occ_local, pose, alpha, c):
@@ -338,7 +338,7 @@ class SplineLocalization:
 
 
     """"Occupancy grid mapping routine to update map using range measurements"""
-    def update_localization(self, map, ranges, pose_estimative=None):
+    def update_localization(self, map, ranges, pose_estimative=None, unreliable_odometry=True):
         if pose_estimative is None:
             pose_estimative = np.copy(self.pose)
         # Removing spurious measurements
@@ -353,18 +353,22 @@ class SplineLocalization:
         self.time[1] += time.time() - tic
         # Localization
         tic = time.time()
-        best_cost_self = np.inf
-        candidate = [0]
-        for theta in candidate:
-            pose_self, cost_self, step_self = self.compute_pose(map, self.pose + np.array([0,0,theta]), pts_occ_local, nb_iteration_max=5)
-            if cost_self < best_cost_self:
-                best_cost_self = cost_self
-                best_pose_self = pose_self
-                best_step_self = step_self
-        pose_estimative, cost_estimative, step_estimative = self.compute_pose(map, np.array(pose_estimative), pts_occ_local, nb_iteration_max=5)        
-
-        if best_cost_self < cost_estimative:
-            self.pose, _, _ = self.compute_pose(map, best_pose_self, pts_occ_local, nb_iteration_max=self.nb_iteration_max-10, gradient_step_size=best_step_self)
+        
+        best_cost_estimate = np.inf
+        if unreliable_odometry:
+            candidate = [0, np.pi/4., -np.pi/4., np.pi/2., -np.pi/2]
         else:
-            self.pose, _, _ = self.compute_pose(map, pose_estimative, pts_occ_local, nb_iteration_max=self.nb_iteration_max-10, gradient_step_size=step_estimative)
+            candidate = [0]
+        for theta in candidate:
+            pose_estimate_candidate, cost_estimate, step_self = self.compute_pose(map, np.array(pose_estimative) + np.array([0,0,theta]), pts_occ_local, nb_iteration_max=5)
+            if cost_estimate < best_cost_estimate:
+                best_cost_estimate = cost_estimate
+                best_pose_estimate = pose_estimate_candidate
+                best_step_estimate = step_self
+        pose_self, cost_self, step_self = self.compute_pose(map,  self.pose, pts_occ_local, nb_iteration_max=5)        
+
+        if best_cost_estimate < cost_self:
+            self.pose, _, _ = self.compute_pose(map, best_pose_estimate, pts_occ_local, nb_iteration_max=self.nb_iteration_max-10, gradient_step_size=best_step_estimate)
+        else:
+            self.pose, _, _ = self.compute_pose(map, pose_self, pts_occ_local, nb_iteration_max=self.nb_iteration_max-10, gradient_step_size=step_self)
         self.time[2] += time.time() - tic
