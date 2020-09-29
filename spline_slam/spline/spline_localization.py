@@ -280,8 +280,8 @@ class SplineLocalization:
         R = np.array([[-sin, -cos],[cos, -sin]])           
         # compute H and b  
         ds_occ = np.zeros([2, n_occ])
-        ds_occ[0,:]=np.sum(map.ctrl_pts[c_index_occ]*dBx_occ, axis=1)
-        ds_occ[1,:]=np.sum(map.ctrl_pts[c_index_occ]*dBy_occ, axis=1)
+        ds_occ[0,:]=np.sum(map.ctrl_pts[c_index_occ]*dBx_occ, axis=1)/self.logodd_max_occupied
+        ds_occ[1,:]=np.sum(map.ctrl_pts[c_index_occ]*dBy_occ, axis=1)/self.logodd_max_occupied
         dpt_occ_local = R@pts_occ_local
     
         # JAcobian

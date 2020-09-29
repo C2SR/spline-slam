@@ -144,16 +144,16 @@ def main():
             localization_time += np.sum(multi_res_localization[res].time)
   
         pose = np.array(multi_res_localization[nb_resolution-1].pose)
-        #print(timestamp, pose[0], pose[1], pose[2])
-        print( num, 
-            1./(mapping_time/num), 
-            1./(localization_time/num), 
-            1./(mapping_time/num + localization_time/num) ) 
+        print(timestamp, pose[0], pose[1], pose[2])
+        # print( num, 
+        #     1./(mapping_time/num), 
+        #     1./(localization_time/num), 
+        #     1./(mapping_time/num + localization_time/num) ) 
 
         ########## Plotting #################
-        if (frame_counter > 0  and (num == 7373 or num == 1987 or num==13630 or num==4933 or num==7060)) or (frame_counter> 20):          
+        if (frame_counter > 0  and (num == 7373 or num == 1987 or num==13630 or num==4933 or num==7060)) or (frame_counter> 450):          
             offset = nb_resolution-nb_resolution_plot
-            if frame_nb < 265:
+            if frame_nb < -1:
                 frame_nb +=1
                 frame_counter = 0
                 # Update path
@@ -196,7 +196,7 @@ def main():
                     # Saving
                     axs[res-offset].axis('equal')
 
-                    plt.savefig('image/aces/' + input_param + '_' + str(frame_nb).zfill(4) + '.png')
+                    plt.savefig('image/' + input_param + '_' + str(frame_nb).zfill(4) + '.png')
                     toc = time.time()
                 frame_counter = 0
                 frame_nb +=1
