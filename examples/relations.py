@@ -50,8 +50,10 @@ def main():
             slam_data = np.fromstring(slam_data, dtype=np.float, sep=' ' )  
             timestamp = slam_data[0]
             if np.abs(timestamp - timestamp_init) < 1e-3:
+                timestamp_init_log = timestamp
                 pose_init = np.array([slam_data[1], slam_data[2], slam_data[3]])
             elif np.abs(timestamp - timestamp_final) < 1e-3:
+                timestamp_final_log = timestamp
                 pose_final = np.array([slam_data[1], slam_data[2], slam_data[3]])
             if pose_init is not None and pose_final is not None:
                 break
@@ -66,7 +68,7 @@ def main():
         translation_error = np.vstack([translation_error, relative_pose_error[0:2]])
         orientation_error = np.vstack([orientation_error, relative_pose_error[2]])
         counter = counter + 1
-        print(miss, counter, np.mean(np.linalg.norm(translation_error, axis=1)))            
+        print(miss, counter, timestamp_init_log - timestamp_init, timestamp_final_log - timestamp_final, np.mean(np.linalg.norm(translation_error, axis=1)))            
 
     print('----------------------------')
     print(np.mean(np.linalg.norm(translation_error, axis=1)), np.std(np.linalg.norm(translation_error, axis=1)))

@@ -27,7 +27,7 @@ def main():
                         'surface_size': np.array([150.,150.]),
                         'min_angle': -90*np.pi/180., # -130*np.pi/180,
                         'max_angle': 90*np.pi/180., #129.75*np.pi/180,
-                        'angle_increment': 1.*np.pi/180., #.25*np.pi/180,
+                        'angle_increment': 1.*np.pi/361., #.25*np.pi/180,
                         'range_min': 0.1,
                         'range_max': 49.9, 
                         'logodd_occupied': 1., #logodd_occupied[res],#1 - .2*(nb_resolution - res - 1), #./(2**(nb_resolution - res - 1)),
@@ -77,7 +77,7 @@ def main():
     y, x = np.mgrid[-60:10+dy:dy, -40:40+dx:dx] # ACES
     #y, x = np.mgrid[-25:10+dy:dy, -15:25+dx:dx] # INTEL
     #y, x = np.mgrid[-15:15+dy:dy, -30:25+dx:dx] # FREIBURG
-    #y, x = np.mgrid[-25:50+dy:dy, -20:40+dx:dx] # MIT-CSAIL
+    y, x = np.mgrid[-25:50+dy:dy, -20:40+dx:dx] # MIT-CSAIL
     #y, x = np.mgrid[-100:150+dy:dy, -220:50+dx:dx] # MIT-KILLIAN
 
     #y, x = np.mgrid[-12.5:5+dy:dy, -5:5+dx:dx]
@@ -97,7 +97,7 @@ def main():
         pose = data[1:4]
         ranges = data[4:]
         for res in range(0, nb_resolution):
-            if num < 2:
+            if num < 5:
                 previous_pose = pose
                 multi_res_localization[res].pose = np.array([0,0,0])
                 path = np.array([0,0]).reshape(2,1)
@@ -146,16 +146,16 @@ def main():
         for res in range(0, nb_resolution):
             mapping_time += np.sum(multi_res_mapping[res].time)
             localization_time += np.sum(multi_res_localization[res].time)
-        #print(timestamp, pose[0], pose[1], pose[2])
-        print( num, 
-            1./(mapping_time/num), 
-            1./(localization_time/num), 
-            1./(mapping_time/num + localization_time/num) ) 
+        print(timestamp, pose[0], pose[1], pose[2])
+        # print( num, 
+        #     1./(mapping_time/num), 
+        #     1./(localization_time/num), 
+        #     1./(mapping_time/num + localization_time/num) ) 
 
         
 
         ########## Plotting #################
-        if (frame_counter > 0  and (num == 7373 or num == 1987 or num==13630 or num==4933 or num==7060)) or (frame_counter> 200):          
+        if (frame_counter > 0  and (num == 7373 or num == 1987 or num==13630 or num==4933 or num==7060)) or (frame_counter> 450):          
             offset = nb_resolution-nb_resolution_plot
             if frame_nb < -1:
                 frame_nb +=1
@@ -200,7 +200,7 @@ def main():
                     # Saving
                     axs[res-offset].axis('equal')
 
-                    plt.savefig('image/aces/' + input_param + '_' + str(frame_nb).zfill(4) + '.png')
+                    plt.savefig('image/intel/' + input_param + '_' + str(frame_nb).zfill(4) + '.png')
                     toc = time.time()
                 frame_counter = 0
                 frame_nb +=1
