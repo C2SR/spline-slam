@@ -66,13 +66,14 @@ class SplineMap:
 
     """ Detect free space """
     def detect_free_space(self, ranges):      
-        ranges_free = ranges 
+        ranges_free = ranges + self.map.knot_space
         init = int(np.random.rand()*self.sensor_subsampling_factor)
         index_free =  np.where((ranges_free >= self.range_min) & (ranges  <= self.range_max))[0][init::self.sensor_subsampling_factor]
         index_free_matrix = self.free_ranges_matrix[:,index_free] <  \
                             (ranges_free[index_free]).reshape([1,-1])
-        index_free_matrix[:,0:-1] = np.logical_and(index_free_matrix[:,0:-1], index_free_matrix[:,1:]) 
-        index_free_matrix[:,1:] = np.logical_and(index_free_matrix[:,1:], index_free_matrix[:,0:-1])  
+
+        #index_free_matrix[:,0:-1] = np.logical_and(index_free_matrix[:,0:-1], index_free_matrix[:,1:]) 
+        #index_free_matrix[:,1:] = np.logical_and(index_free_matrix[:,1:], index_free_matrix[:,0:-1])  
 
         pts_free = np.vstack([self.ray_matrix_x[:, index_free][index_free_matrix],
                             self.ray_matrix_y[:, index_free][index_free_matrix]]) 
@@ -91,36 +92,29 @@ class SplineMap:
         B_occ, _, _ = self.map.compute_tensor_spline(pts_occ, ORDER=0x01)
         s_est_occ_ant = np.sum(self.map.ctrl_pts[c_index_occ]*B_occ, axis=1)
 
-        c_index_occ_free = np.intersect1d(c_index_free, c_index_occ)
+        # Free space
         self.map.ctrl_pts[c_index_free] -= self.logodd_free
-        self.map.ctrl_pts[c_index_occ_free] += .5*self.logodd_free
+        self.map.ctrl_pts[c_index_occ] += .5*self.logodd_free
 
-        #Occupied space 
-        for i in range(0, pts_occ.shape[1]):
-            if i < pts_occ.shape[1]-1:
-                d = np.linalg.norm(pts_occ[:,i+1] - pts_occ[:,i])    
-            else:
-                d = np.linalg.norm(pts_occ[:, i] - pts_occ[:, i-1])
-            d = (min(d/(4*self.map.knot_space),1))
-            s_est_occ = np.sum(self.map.ctrl_pts[c_index_occ[i,:]]*B_occ[i,:])   
-            e_occ = min(self.logodd_max_occupied, (s_est_occ_ant[i] + self.logodd_occupied))-s_est_occ 
-            B_occ_norm = np.linalg.norm(B_occ[i,:])
-            B_occ_norm_squared = B_occ_norm**2
-            mag_occ =  e_occ /B_occ_norm_squared
-            np.add.at(self.map.ctrl_pts, c_index_occ[i,:], d*(B_occ[i,:]*mag_occ))
+        # Occupied space [SLOW]
+        # for i in range(0, pts_occ.shape[1]):
+        #     s_est_occ = np.sum(self.map.ctrl_pts[c_index_occ[i,:]]*B_occ[i,:])   
+        #     e_occ = min(self.logodd_max_occupied, (s_est_occ_ant[i] + self.logodd_occupied))-s_est_occ 
+        #     B_occ_norm = np.linalg.norm(B_occ[i,:])
+        #     B_occ_norm_squared = B_occ_norm**2
+        #     mag_occ =  e_occ /B_occ_norm_squared
+        #     np.add.at(self.map.ctrl_pts, c_index_occ[i,:], (B_occ[i,:]*mag_occ))
 
-        # s_est_occ = np.sum(self.map.ctrl_pts[c_index_occ]*B_occ, axis=1)   
-        # e_occ = (self.logodd_max_occupied - s_est_occ) 
-        # B_occ_norm = np.linalg.norm(B_occ, axis=1)
-        # B_occ_norm_squared = B_occ_norm**2
-        # mag_occ =  np.minimum(self.logodd_occupied/B_occ_norm_squared, np.abs(e_occ)) * np.sign(e_occ)
-        # np.add.at(self.map.ctrl_pts, c_index_occ, (B_occ.T*mag_occ).T)        
+        # Occupied space [FAST]
+        s_est_occ = s_est_occ_ant #np.sum(self.map.ctrl_pts[c_index_occ]*B_occ, axis=1)   
+        e_occ = (self.logodd_max_occupied - s_est_occ) 
+        B_occ_norm = np.linalg.norm(B_occ, axis=1)
+        B_occ_norm_squared = B_occ_norm**2
+        mag_occ =  np.minimum(self.logodd_occupied/B_occ_norm_squared, np.abs(e_occ)) * np.sign(e_occ)
+        np.add.at(self.map.ctrl_pts, c_index_occ, (B_occ.T*mag_occ).T)        
 
-        # Control points index 
-        c_index_min = min(np.min(c_index_occ[:,0]), np.min(c_index_free[:,0]))
-        c_index_max = max(np.max(c_index_occ[:,-1]), np.max(c_index_free[:,-1]))    
-        self.map.ctrl_pts[c_index_min:c_index_max+1] = np.maximum(np.minimum(self.map.ctrl_pts[c_index_min:c_index_max+1], self.logodd_max_occupied), self.logodd_min_free)
-
+        # Clamping control points 
+        self.map.ctrl_pts[c_index_free] = np.maximum(np.minimum(self.map.ctrl_pts[c_index_free], self.logodd_max_occupied), self.logodd_min_free)
 
     """ Evaluata map """
     def evaluate_map(self, pts):
@@ -132,24 +126,24 @@ class SplineMap:
     """"Occupancy grid mapping routine to update map using range measurements"""
     def update_map(self, pose, ranges):
         # Removing spurious measurements
-        tic = time.time()
+        tic = time.clock()
         ranges_occ, angles_occ = self.remove_spurious_measurements(ranges)
-        self.time[0] += time.time() - tic
+        self.time[0] += time.clock() - tic
         # Converting range measurements to metric coordinates
-        tic = time.time()
+        tic = time.clock()
         pts_occ_local = self.range_to_coordinate(ranges_occ, angles_occ)
-        self.time[1] += time.time() - tic
+        self.time[1] += time.clock() - tic
         # Detecting free cells in metric coordinates
-        tic = time.time()
+        tic = time.clock()
         pts_free_local  = self.detect_free_space(ranges)
-        self.time[2] += time.time() - tic
+        self.time[2] += time.clock() - tic
         # Transforming metric coordinates from the local to the global frame
-        tic = time.time()
+        tic = time.clock()
         pts_occ = self.local_to_global_frame(pose,pts_occ_local)
         pts_free = self.local_to_global_frame(pose,pts_free_local)
-        self.time[3] += time.time() - tic
+        self.time[3] += time.clock() - tic
         # Compute spline
-        tic = time.time()
+        tic = time.clock()
         self.update_spline_map(pts_occ,  pts_free, pose)
-        self.time[4] += time.time() - tic
+        self.time[4] += time.clock() - tic
         
