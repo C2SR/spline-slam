@@ -68,7 +68,7 @@ def main():
         translation_error = np.vstack([translation_error, relative_pose_error[0:2]])
         orientation_error = np.vstack([orientation_error, relative_pose_error[2]])
         counter = counter + 1
-        print(miss, counter, timestamp_init_log - timestamp_init, timestamp_final_log - timestamp_final, np.mean(np.linalg.norm(translation_error, axis=1)))            
+        print(miss, counter, timestamp_init_log, timestamp_final_log,  np.std(np.linalg.norm((180./np.pi)*orientation_error, axis=1)**2))            
 
     print('----------------------------')
     print(np.mean(np.linalg.norm(translation_error, axis=1)), np.std(np.linalg.norm(translation_error, axis=1)))
