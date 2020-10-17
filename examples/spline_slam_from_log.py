@@ -22,6 +22,7 @@ def main():
     multi_res_mapping = {}
     multi_res_map = {}
     nb_resolution = 3
+    
     for res in range(0,nb_resolution):
         max_nb_rays = 60*(res+1)
         kwargs_spline= {'knot_space': .05*((2.5)**(nb_resolution-res-1)), #2.5 
@@ -90,7 +91,6 @@ def main():
     previous_timestamp = 0
 
     for num, data in enumerate(file_handle, start=1):
-        #print(num)
         ######### Collecting data from log ##########
         data = np.fromstring( data, dtype=np.float, sep=' ' )
         timestamp = data[0]
@@ -209,3 +209,7 @@ def main():
 
         ########## Counters #################
         frame_counter += 1
+
+if __name__ == '__main__':
+    main()
+   #plt.show()
