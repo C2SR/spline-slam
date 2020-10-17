@@ -1,11 +1,11 @@
 import numpy as np
 import math
 import time
+from scipy.optimize import least_squares
 
 class SplineLocalization:
-    def __init__(self, **kwargs):
+    def __init__(self, spline_map, **kwargs): 
         # Parameters
-        knot_space = kwargs['knot_space'] if 'knot_space' in kwargs else .05
         min_angle = kwargs['min_angle'] if 'min_angle' in kwargs else 0.
         max_angle = kwargs['max_angle'] if 'max_angle' in kwargs else 2.*np.pi 
         angle_increment = kwargs['angle_increment'] if 'angle_increment' in kwargs else 1.*np.pi/180.
@@ -17,11 +17,8 @@ class SplineLocalization:
         nb_iteration_max = kwargs['nb_iteration_max'] if 'nb_iteration_max' in kwargs else 10
         alpha = kwargs['alpha'] if 'alpha' in kwargs else 2
 
-        # Spline-map parameters
-        self.degree = 3
-        self.knot_space = knot_space
-
         # LogOdd Map parameters
+        self.map = spline_map
         self.logodd_min_free = logodd_min_free
         self.logodd_max_occupied = logodd_max_occupied
 
@@ -64,311 +61,109 @@ class SplineLocalization:
         R = np.array([[c, -s],[s, c]])
         return np.matmul(R, local) + pose[0:2].reshape(2,1)
     
-    """ Compute spline coefficient index associated to the sparse representation """
-    def compute_sparse_spline_index(self, tau, origin):
-        mu    = -(np.ceil(-tau/self.knot_space).astype(int)) + origin
-        c = np.zeros([len(tau),(self.degree+1)],dtype='int')
-        for i in range(0, self.degree+1):
-            c[:,i] = mu-self.degree+i
-        return c
-
-    """ Compute spline tensor coefficient index associated to the sparse representation """
-    def compute_sparse_tensor_index(self, map, pts):
-        # Compute spline along each axis
-        cx = self.compute_sparse_spline_index(pts[0,:], map.grid_center[0,0])
-        cy = self.compute_sparse_spline_index(pts[1,:], map.grid_center[1,0])
-
-        # Kronecker product for index
-        c = np.zeros([cx.shape[0],(self.degree+1)**2],dtype='int')
-        for i in range(0, self.degree+1):
-            for j in range(0, self.degree+1):
-                c[:,i*(self.degree+1)+j] = cy[:,i]*(map.grid_size[0,0])+cx[:,j]
-        return c
-
-    """"Compute spline coefficients - 1D function """
-    def compute_spline_order(self, tau, origin, ORDER=0):
-        tau_bar = (tau/self.knot_space + origin) % 1 
-        tau_3 = tau_bar + 3
-        tau_2 = tau_bar + 2        
-        tau_1 = tau_bar + 1
-        tau_0 = tau_bar
-        
-        b = np.zeros([len(tau),self.degree+1])
-        b[:,0] = 1/(6)*(-tau_3**3 + 12*tau_3**2 - 48*tau_3 + 64) 
-        b[:,1] = 1/(6)*(3*tau_2**3 - 24*tau_2**2 + 60*tau_2 - 44)
-        b[:,2] = 1/(6)*(-3*tau_1**3 + 12*tau_1**2 - 12*tau_1 + 4)
-        b[:,3] = 1/(6)*(tau_0**3)
-
-        if ORDER == 1:
-            # 1st derivative of spline
-            db = np.zeros([len(tau),self.degree+1]) 
-            db[:,0] = 1/(6)*(-3*tau_3**2 + 24*tau_3 - 48 ) * (1./self.knot_space) 
-            db[:,1] = 1/(6)*(9*tau_2**2 - 48*tau_2 + 60 ) * (1./self.knot_space)
-            db[:,2] = 1/(6)*(-9*tau_1**2 + 24*tau_1 - 12) * (1./self.knot_space)
-            db[:,3] = 1/(6)*(3*tau_0**2) * (1./self.knot_space)
-            return b, db
-        else:
-            return b, -1 
-
-    """"Compute spline tensor coefficients - 2D function """
-    def compute_tensor_spline_order(self, map, pts, ORDER=0):
-        # Storing number of points
-        nb_pts = pts.shape[1]
-
-        # Compute spline along each axis
-        bx, dbx = self.compute_spline_order(pts[0,:], map.grid_center[0,0], ORDER)
-        by, dby = self.compute_spline_order(pts[1,:], map.grid_center[1,0], ORDER)
-
-        # Compute spline tensor
-        B = np.zeros([nb_pts,(self.degree+1)**2])
-        for i in range(0,self.degree+1):
-            for j in range(0,self.degree+1):           
-                B[:,i*(self.degree+1)+j] = by[:,i]*bx[:,j]
-
-
-        if ORDER ==1:
-            dBx = np.zeros([nb_pts,(self.degree+1)**2])
-            dBy = np.zeros([nb_pts,(self.degree+1)**2])        
-            for i in range(0,self.degree+1):
-                for j in range(0,self.degree+1):           
-                    dBx[:,i*(self.degree+1)+j] = by[:,i]*dbx[:,j]
-                    dBy[:,i*(self.degree+1)+j] = dby[:,i]*bx[:,j]
-            return B, dBx, dBy
-
-        return B, -1
-
-    """"Compute spline coefficients - 1D function """
-    def compute_spline(self, tau, origin):
-        # Number of points
-        nb_pts = len(tau)
-        # Normalize regressor
-        mu    = -(np.ceil(-tau/self.knot_space).astype(int)) + origin
-        tau_bar = (tau/self.knot_space + origin) % 1 
-
-        # Compute spline function along the x-axis        
-        tau_3 = tau_bar + 3
-        tau_2 = tau_bar + 2        
-        tau_1 = tau_bar + 1
-        tau_0 = tau_bar
-
-        # Spline
-        b = np.zeros([nb_pts,self.degree+1])
-        b[:,0] = 1/(6)*(-tau_3**3 + 12*tau_3**2 - 48*tau_3 + 64) 
-        b[:,1] = 1/(6)*(3*tau_2**3 - 24*tau_2**2 + 60*tau_2 - 44)
-        b[:,2] = 1/(6)*(-3*tau_1**3 + 12*tau_1**2 - 12*tau_1 + 4)
-        b[:,3] = 1/(6)*(tau_0**3)
-
-        # 1st derivative of spline
-        db = np.zeros([nb_pts,self.degree+1])
-        db[:,0] = 1/(6)*(-3*tau_3**2 + 24*tau_3 - 48 ) * (1/self.knot_space) 
-        db[:,1] = 1/(6)*(9*tau_2**2 - 48*tau_2 + 60 ) * (1/self.knot_space)
-        db[:,2] = 1/(6)*(-9*tau_1**2 + 24*tau_1 - 12) * (1/self.knot_space)
-        db[:,3] = 1/(6)*(3*tau_0**2) * (1/self.knot_space)
-
-        # 2nd derivative of spline
-        ddb = np.zeros([nb_pts,self.degree+1])
-        ddb[:,0] = 1/(6)*(-6*tau_3 + 24) * (1/self.knot_space**2)
-        ddb[:,1] = 1/(6)*(18*tau_2 - 48) * (1/self.knot_space**2)
-        ddb[:,2] = 1/(6)*(-18*tau_1 + 24) * (1/self.knot_space**2)
-        ddb[:,3] = 1/(6)*(6*tau_0) * (1/self.knot_space**2)
-
-        c = np.zeros([nb_pts,(self.degree+1)],dtype='int')
-        for i in range(0, self.degree+1):
-            c[:,i] = mu-self.degree+i
-
-        return c, b, db, ddb
-
-    """"Compute spline tensor coefficients - 2D function """
-    def compute_tensor_spline(self, map, pts):
-        # Storing number of points
-        nb_pts = pts.shape[1]
-
-        # Compute spline along each axis
-        cx, bx, dbx, ddbx  = self.compute_spline(pts[0,:], map.grid_center[0,0])
-        cy, by, dby, ddby  = self.compute_spline(pts[1,:], map.grid_center[1,0])
-
-        # Compute spline tensor
-        ctrl_pt_index = np.zeros([nb_pts,(self.degree+1)**2],dtype='int')
-        B = np.zeros([nb_pts,(self.degree+1)**2])
-        dBx = np.zeros([nb_pts,(self.degree+1)**2])
-        dBy = np.zeros([nb_pts,(self.degree+1)**2])
-        ddBx = np.zeros([nb_pts,(self.degree+1)**2])
-        ddBy = np.zeros([nb_pts,(self.degree+1)**2])
-        ddBxy = np.zeros([nb_pts,(self.degree+1)**2])       
-        for i in range(0,self.degree+1):
-            for j in range(0,self.degree+1):           
-                ctrl_pt_index[:,i*(self.degree+1)+j] = cy[:,i]*(map.grid_size[0,0])+cx[:,j]
-                B[:,i*(self.degree+1)+j] = by[:,i]*bx[:,j]
-                dBx[:,i*(self.degree+1)+j] = by[:,i]*dbx[:,j]
-                dBy[:,i*(self.degree+1)+j] = dby[:,i]*bx[:,j]
-                ddBx[:,i*(self.degree+1)+j] = by[:,i]*ddbx[:,j]
-                ddBy[:,i*(self.degree+1)+j] = ddby[:,i]*bx[:,j]
-                ddBxy[:,i*(self.degree+1)+j] = dby[:,i]*dbx[:,j]                                
-
-        return ctrl_pt_index, B, dBx, dBy, ddBx, ddBy, ddBxy
-
     """ Estimate pose (core function) """
-    def compute_pose(self, map, pose_estimate, pts_occ_local, nb_iteration_max, gradient_step_size = .1):
-        # Initializing parameters
-        nb_iterations = 0.
-        residue = np.inf
- 
-        alpha = 2.
-        self.c = 1. #1 #2./3 #/3
+    def compute_pose(self, pose_estimate, pts_occ_local, ftol=1e-3, max_nfev=5):
+        self.flag = False
 
-        has_updated = True
-        nb_updates = 0
-        while (np.abs(residue) > .0001) and nb_iterations < nb_iteration_max:
-            if has_updated:
-                df, cost = self.compute_pose_increment(map, pts_occ_local, pose_estimate, alpha=alpha, c=self.c)
-                if np.linalg.norm(df[0:2]) > self.knot_space:
-                    df = self.knot_space*df/np.linalg.norm(df[0:2])
+        self.c_index_change = np.inf
+        self.c_index = None
+        self.h_occ = None
 
-            # Compute pose 
-            delta_pose = gradient_step_size*df
-            pose_estimate_candidate = pose_estimate - delta_pose
-            cost_candidate = self.cost_function(map, pts_occ_local, pose_estimate_candidate, alpha=alpha, c=self.c)
-            residue =  cost - cost_candidate
+        self.threshold_c_index = .05*16*pts_occ_local.shape[1]
 
-            if residue > 0 :
-                gradient_step_size = 1.25*gradient_step_size
-                pose_estimate = pose_estimate_candidate
-                cost = cost_candidate
-                has_updated = True
-                nb_updates += 1
-                nb_iterations += 1
- 
-            else:
-                gradient_step_size /= 4
-                has_updated = False
+        res = least_squares(self.scipy_cost_function, 
+                            pose_estimate,
+                            jac = self.scipy_jacobian, 
+                            verbose = 0, 
+                            method='lm',
+                            loss='linear',
+                            ftol = ftol,
+                            max_nfev = max_nfev,
+                            f_scale = 1.,
+                            args=pts_occ_local )
 
-        return pose_estimate, cost, gradient_step_size
+        return res.x, res.cost
 
-    def cost_function(self, map, pts_occ_local, pose, alpha, c):
-        # computing alignment error
-        pts_occ = self.local_to_global_frame(pose, pts_occ_local)
-        c_index_occ = self.compute_sparse_tensor_index(map, pts_occ)
-        B_occ, _ = self.compute_tensor_spline_order(map, pts_occ, ORDER=0)        
-        s_occ = np.sum(map.ctrl_pts[c_index_occ]*B_occ, axis=1)        
-        e_occ = (1 - s_occ/self.logodd_max_occupied)
-
-        if alpha == 2:   # squared error (L2) loss function
-            r = .5*(e_occ/c)**2
-        elif alpha == 0:   # Cauchy (aka  Lorentzian) loss 
-            r = np.log( .5*(e_occ/c)**2 +1  )
-        elif alpha == -np.inf:  # Welsch (aka Leclerc) loss function
-            r = 1 - np.exp(-.5 * (e_occ/c)**2)
+    def scipy_jacobian(self, pose, pts_occ_local_x, pts_occ_local_y):
+        # Recompute jacobian only if change in control points is above threshold_c_index
+        if self.c_index_change < self.threshold_c_index:
+            return self.h_occ.T
         else:
-            r =  (abs(alpha-2)/alpha)  * ( (((e_occ/c)**2)/abs(alpha-2) + 1)**(alpha/2.) - 1)
+            self.flag = False
 
-        return np.sum(r)
-
-    def compute_pose_increment(self, map, pts_occ_local, pose, alpha, c):
+        pts_occ_local = np.vstack([pts_occ_local_x, pts_occ_local_y])
         # Transforming occupied points to global frame
-        pts_occ_global = self.local_to_global_frame(pose, pts_occ_local)
+        pts_occ = self.local_to_global_frame(pose, pts_occ_local)
         # Spline tensor
-        c_index_occ = self.compute_sparse_tensor_index(map, pts_occ_global)
-        B_occ, dBx_occ, dBy_occ = self.compute_tensor_spline_order(map, pts_occ_global, ORDER=1)                
-        #c_index_occ, B_occ, dBx_occ, dBy_occ, ddBx_occ, ddBy_occ, ddBxy_occ = self.compute_tensor_spline(map, pts_occ_global)
-        # Current value on the map
-        s_occ = np.sum(map.ctrl_pts[c_index_occ]*B_occ, axis=1) 
-        # Alginment error
-        e_occ = (1 - (s_occ/self.logodd_max_occupied))            
-        n_occ = len(e_occ)
+        c_index_occ = self.map.compute_sparse_tensor_index(pts_occ)
+        _, dBx_occ, dBy_occ = self.map.compute_tensor_spline(pts_occ, ORDER= 0x02)                
         # Rotation matrix
         cos, sin = np.cos(pose[2]), np.sin(pose[2])
         R = np.array([[-sin, -cos],[cos, -sin]])           
         # compute H and b  
-        ds_occ = np.zeros([2, n_occ])
-        ds_occ[0,:]=np.sum(map.ctrl_pts[c_index_occ]*dBx_occ, axis=1)/self.logodd_max_occupied
-        ds_occ[1,:]=np.sum(map.ctrl_pts[c_index_occ]*dBy_occ, axis=1)/self.logodd_max_occupied
+        ds_occ = np.zeros([2, len(pts_occ_local_x)])
+        ds_occ[0,:]=np.sum((self.map.ctrl_pts[c_index_occ]) *dBx_occ, axis=1)/ self.logodd_max_occupied 
+        ds_occ[1,:]=np.sum((self.map.ctrl_pts[c_index_occ]) *dBy_occ, axis=1)/ self.logodd_max_occupied
         dpt_occ_local = R@pts_occ_local
     
-        # JAcobian
-        h_occ = np.zeros([3,n_occ])
+        # Jacobian
+        h_occ = np.zeros([3, len(pts_occ_local_x)])
         h_occ[0,:] = -ds_occ[0,:]
         h_occ[1,:] = -ds_occ[1,:]
         h_occ[2,:] = -np.sum(dpt_occ_local*ds_occ,axis=0)
 
-        if alpha == 2:   # Welsch/Leclerc loss function
-            r = .5*(e_occ/c)**2
-            df = (1./c**2)*np.sum( e_occ * h_occ, axis = 1)
-            # dfx = (1./c**2)*( e_occ )
-            # ddfx = (1./c**2)
+        self.h_occ = h_occ
 
-        elif alpha == 0:
-            r = np.log( .5*(e_occ/c)**2 +1  )
-            df = np.sum( 2* e_occ /(e_occ**2 + 2*c**2)* h_occ, axis = 1)
-            # dfx =  2* e_occ /(e_occ**2 + 2*c**2)
-            # ddfx =  2* (-e_occ**2 + 2*c**2) /((e_occ**2 + 2*c**2)**2)
+        return h_occ.T
 
-        elif alpha == -np.inf:
-            z = np.exp(-.5*(e_occ/c)**2)
-            r = 1 - z
-            df = (1./c**2)*np.sum( e_occ * z * h_occ, axis = 1)  
-            # dfx = (1./c**2)*( e_occ * z )
-            # ddfx = (z/c**2)*(1 - (e_occ/c)**2 )
+    def scipy_cost_function(self, pose, pts_occ_local_x, pts_occ_local_y):
+        # computing alignment error
+        pts_occ_local = np.vstack([pts_occ_local_x, pts_occ_local_y])
+        pts_occ = self.local_to_global_frame(pose, pts_occ_local)
+        c_index_occ = self.map.compute_sparse_tensor_index(pts_occ)
+        B_occ, _, _ = self.map.compute_tensor_spline(pts_occ, ORDER=0x01)        
+        s_occ = np.sum(self.map.ctrl_pts[c_index_occ]*B_occ, axis=1) /self.logodd_max_occupied       
+        r = (1 - s_occ)
+
+        if self.flag is True:
+            self.c_index_change = np.sum(self.c_index != c_index_occ)
         else:
-            z = ((e_occ/c)**2 / abs(alpha-2)) + 1
-            r =  abs(alpha-2)/alpha  * (z**(alpha/2.) - 1)
-            df = (1./c**2)*np.sum( e_occ * z**(alpha/2.-1) * h_occ, axis = 1)
-            # dfx = (1./c**2)*( e_occ * (z**(alpha/2.-1)) )            
-            # ddfx = (1./c**2)* ( (z**(alpha/2.-1)) + np.sign(alpha-2)* (z**(alpha/2.-2)) *(e_occ/c)**2  ) 
+            self.c_index = c_index_occ
+            self.flag = True
 
-        # H = np.zeros([3,3])
-        # sxx = dfx*np.sum(map.ctrl_pts[c_index_occ]*ddBx_occ, axis=1)
-        # syy = dfx*np.sum(map.ctrl_pts[c_index_occ]*ddBy_occ, axis=1)
-        # sxy = dfx*np.sum(map.ctrl_pts[c_index_occ]*ddBxy_occ, axis=1)                
-        # sxtheta =  dpt_occ_local[0,:]*sxx + dpt_occ_local[1,:]*sxy
-        # sytheta =  dpt_occ_local[0,:]*sxy + dpt_occ_local[1,:]*syy
-        # sthetatheta = dpt_occ_local[0,:]*sxtheta + dpt_occ_local[1,:]*sytheta
-
-        # H[0,0] = np.sum(sxx)
-        # H[1,1] = np.sum(syy)
-        # H[2,2] = np.sum(sthetatheta)
-        # H[0,1] = H[1,0] = np.sum(sxy)
-        # H[0,2] = H[2,0] = np.sum(sxtheta)
-        # H[1,2] = H[2,1] = np.sum(sytheta)
-
-        # ddf = ( (ddfx*h_occ) @ h_occ.T + H)         
-        #if np.linalg.det(ddf) > self.det_Hinv_threshold:
-        #    df = np.linalg.inv(ddf)@df   
-        cost = np.sum(r)
-        return df, cost 
-
+        return r
 
     """"Occupancy grid mapping routine to update map using range measurements"""
-    def update_localization(self, map, ranges, pose_estimative=None, unreliable_odometry=True):
+    def update_localization(self, ranges, pose_estimative=None, unreliable_odometry=False):
         if pose_estimative is None:
             pose_estimative = np.copy(self.pose)
+
         # Removing spurious measurements
-        tic = time.time()
+        tic = time.clock()
         ranges_occ, angles = self.remove_spurious_measurements(ranges)
-        self.time[0] += time.time() - tic
+        self.time[0] += time.clock() - tic
         # Converting range measurements to metric coordinates
-        tic = time.time()
+        tic = time.clock()
         pts_occ_local = self.range_to_coordinate(ranges_occ, angles)
-        self.pts_occ_local = pts_occ_local
-        #pts_free_local = self.detect_free_space(ranges)
-        self.time[1] += time.time() - tic
+        self.time[1] += time.clock() - tic
         # Localization
-        tic = time.time()
-        
+        tic = time.clock()      
         best_cost_estimate = np.inf
         if unreliable_odometry:
-            candidate = [0, np.pi/4., -np.pi/4., np.pi/2., -np.pi/2]
+            candidate = [0, np.pi/4., -np.pi/4., np.pi/2., -np.pi/2, -1.5*np.pi, -1.5*np.pi]
         else:
             candidate = [0]
         for theta in candidate:
-            pose_estimate_candidate, cost_estimate, step_self = self.compute_pose(map, np.array(pose_estimative) + np.array([0,0,theta]), pts_occ_local, nb_iteration_max=5)
+            pose_estimate_candidate, cost_estimate = self.compute_pose(np.array(pose_estimative) + np.array([0,0,theta]), pts_occ_local, ftol=1e-2, max_nfev=5)
             if cost_estimate < best_cost_estimate:
                 best_cost_estimate = cost_estimate
                 best_pose_estimate = pose_estimate_candidate
-                best_step_estimate = step_self
-        pose_self, cost_self, step_self = self.compute_pose(map,  self.pose, pts_occ_local, nb_iteration_max=5)        
+        pose_self, cost_self= self.compute_pose(self.pose, pts_occ_local, ftol = 1e-2, max_nfev=5)        
 
         if best_cost_estimate < cost_self:
-            self.pose, _, _ = self.compute_pose(map, best_pose_estimate, pts_occ_local, nb_iteration_max=self.nb_iteration_max-10, gradient_step_size=best_step_estimate)
+           self.pose, _ = self.compute_pose(best_pose_estimate, pts_occ_local)
         else:
-            self.pose, _, _ = self.compute_pose(map, pose_self, pts_occ_local, nb_iteration_max=self.nb_iteration_max-10, gradient_step_size=step_self)
-        self.time[2] += time.time() - tic
+           self.pose, _ = self.compute_pose(pose_self, pts_occ_local) 
+
+
+        self.time[2] += time.clock() - tic
