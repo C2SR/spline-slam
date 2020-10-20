@@ -1,4 +1,4 @@
-# spline-slam
+# B-spline SLAM
 This package contains B-spline Surface SLAM, a Simultaneous Localizatio and Mapping (SLAM) algorithm for range-based measurements using spline surfaces maps.
 
 ### Examples
