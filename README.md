@@ -20,7 +20,7 @@ After that, clone this repository. Open a terminal and navigate until the root f
 
 ### Usage
 ##### Running from log
-The package has an example to run the algorithm from a log file. Each scan reading corresponds to a row in the log. The format is as given below: 
+The package has an example to run the algorithm from a log file. Each scan reading corresponds to a row in the log using the format described below: 
 | timestamp | odom.x | odom.y | odom.theta | range[0] | range[1] | ... | range[n-1] |
 |-|-|-|-|-|-|-|-|
 
