@@ -2,7 +2,7 @@
 This package contains a python implementation of the B-spline Surface SLAM algorithm, a Simultaneous Localization and Mapping (SLAM) algorithm for range-based measurements using B-spline surfaces maps.
 
 ### Examples
-Output using the RADISH repository (click on the image to laod video)
+Output using the RADISH repository (click on the image to load video)
 
 | Intel Research Lab | ACES building | Freiburg 079 | MIT-CSAIL |
 |-|-|-|-|
