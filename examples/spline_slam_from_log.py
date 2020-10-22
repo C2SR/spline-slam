@@ -2,8 +2,10 @@ import numpy as np
 
 from spline_slam.spline import SplineLocalization
 from spline_slam.spline import SplineMap
-from spline_slam.spline import CubicSplineSurface
+from spline_slam.spline import Odometry
 from spline_slam.spline import SplinePlot
+from spline_slam.spline import CubicSplineSurface
+
 import sys
 import time
 
@@ -13,20 +15,20 @@ def main():
         sys.exit(-1)
 
     file_name = sys.argv[1]
-    input_param = sys.argv[2]#int(sys.argv[2])
+    input_param = sys.argv[2] #int(sys.argv[2])
 
     # Instantiating the grid map object
     multi_res_localization = {}
     multi_res_mapping = {}
     multi_res_map = {}
-    nb_resolution = 3
+    nb_resolution = 2
     
     for res in range(0,nb_resolution):
         max_nb_rays = 60*(res+1)
         kwargs_spline= {'knot_space': .05*((2.5)**(nb_resolution-res-1)), #2.5 
                         'surface_size': np.array([150.,150.]),
-                        'min_angle': -90*np.pi/180., # -(130-5)*np.pi/180,
-                        'max_angle': 90*np.pi/180., #(129.75-5)*np.pi/180,
+                        'min_angle': -180*np.pi/180., # -(130-5)*np.pi/180,
+                        'max_angle': 180*np.pi/180., #(129.75-5)*np.pi/180,
                         'angle_increment': 1.*np.pi/180., #.25*np.pi/180,
                         'range_min': 0.1,
                         'range_max': 49.9, #49.9, 
@@ -41,6 +43,9 @@ def main():
         multi_res_map[res] = CubicSplineSurface(**kwargs_spline)
         multi_res_localization[res] = SplineLocalization(multi_res_map[res], **kwargs_spline)
         multi_res_mapping[res] = SplineMap(multi_res_map[res], **kwargs_spline)
+    # Odometry
+    odometry = Odometry()
+
     # Plot_
     plot_thread = SplinePlot(multi_res_mapping[nb_resolution-1], **kwargs_spline)
     plot_thread.start()
@@ -50,6 +55,8 @@ def main():
     data = file_handle.readline()  
     data = np.fromstring( data, dtype=np.float, sep=' ' )
     
+    flag = False
+    time0 = time.time()
     for num, data in enumerate(file_handle, start=1):
         ######### Collecting data from log ##########
         data = np.fromstring( data, dtype=np.float, sep=' ' )
@@ -57,26 +64,32 @@ def main():
         pose = data[1:4]
         ranges = data[4:]
         
-
-
         ########### Localization #############
         for res in range(0, nb_resolution):
             if num < 3:
-                continue
+                odom, dt = odometry.pose_to_discrete_odometry(timestamp, pose) 
             else:
+                ###### Odometry ######
                 if res==0:
-                    pose_estimative = 1.*np.copy(multi_res_localization[nb_resolution-1].pose) 
+                    odom, dt = odometry.pose_to_discrete_odometry(timestamp, pose)
+                    pose_estimative = odometry.update(multi_res_localization[nb_resolution-1].pose, odom)
+                    if dt > 1.:
+                        print('Here: ', num, dt)
+                        flag = True
                 else:
-                    pose_estimative = np.copy(multi_res_localization[res-1].pose)
+                    pose_estimative = np.copy(multi_res_localization[res-1].pose)                
                 ###### Scan matching ######
-                multi_res_localization[res].update_localization(ranges, pose_estimative, False)
+                multi_res_localization[res].update_localization(ranges, pose_estimative, flag)
+                flag = False
     
         ############# Mapping ################
         for res in range(0, nb_resolution):
             multi_res_mapping[res].update_map(multi_res_localization[nb_resolution-1].pose, ranges)
 
         ########### Statistics ###########
+        print(num/(time.time()-time0))
         #print(timestamp, pose[0], pose[1], pose[2])
-
+    plot_thread.deactivate()
+    plot_thread.join()
 if __name__ == '__main__':
     main()

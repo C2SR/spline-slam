@@ -19,17 +19,22 @@ class SplinePlot(threading.Thread):
         self.fig, self.ax = plt.subplots()        
         self.fig.tight_layout()
 
-        dx, dy = 0.2, .2
-        y, x = np.mgrid[-25:10+dy:dy, -15:25+dx:dx] # INTEL
+        dx, dy = 0.05, .05
+        #y, x = np.mgrid[-25:10+dy:dy, -15:25+dx:dx] # INTEL
+        y, x = np.mgrid[-5:7.5+dy:dy, -7.5:5+dx:dx] # INTEL
         self.map_pts = np.vstack([x.flatten(), y.flatten()])
         self.map_grid_size = x.shape
         self.x = x
         self.y = y
 
+        self.active = True
         threading.Thread.__init__(self)
 
+    def deactivate(self):
+        self.active = False
+
     def run(self):
-        while 1:
+        while self.active:
             time.sleep(self.sleep_time)
             self.plot_slam()
     
@@ -39,8 +44,8 @@ class SplinePlot(threading.Thread):
                             self.y, 
                             map_value, 
                             cmap='binary',
-                            vmax = self.logodd_max_occupied/3., 
-                            vmin= self.logodd_min_free/3.)
+                            vmax = self.logodd_max_occupied, 
+                            vmin= self.logodd_min_free)
         self.fig.savefig('intel' + '.png')
 
 
