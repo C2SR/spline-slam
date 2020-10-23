@@ -4,24 +4,29 @@ import threading
 import time
 
 class SplinePlot(threading.Thread):
-    def __init__(self, slam_map, **kwargs):
+    def __init__(self, slam_map, traj, **kwargs):
         logodd_min_free = kwargs['logodd_min_free'] if 'logodd_min_free' in kwargs else -100
         logodd_max_occupied = kwargs['logodd_max_occupied'] if 'logodd_max_occupied' in kwargs else 100
-        plot_sleep_time = kwargs['plot_sleep_time'] if 'plot_sleep_time' in kwargs else 10
+        sleep_time = kwargs['plot_sleep_time'] if 'plot_sleep_time' in kwargs else 10
 
         # SLAM
         self.slam_map = slam_map
         self.logodd_min_free = logodd_min_free
         self.logodd_max_occupied = logodd_max_occupied
-        self.sleep_time = plot_sleep_time
+        self.sleep_time = sleep_time
         
-        # Artists
+        # Figures
         self.fig, self.ax = plt.subplots()        
         self.fig.tight_layout()
 
+        # Artists
+        self.traj_marker = self.ax.plot([],[],  linestyle='--', color='b', linewidth=2.5)[0]
+
+        self.traj = traj
+
         dx, dy = 0.05, .05
         #y, x = np.mgrid[-25:10+dy:dy, -15:25+dx:dx] # INTEL
-        y, x = np.mgrid[-5:7.5+dy:dy, -7.5:5+dx:dx] # INTEL
+        y, x = np.mgrid[-5:12.5+dy:dy, -7.5:5+dx:dx] # INTEL
         self.map_pts = np.vstack([x.flatten(), y.flatten()])
         self.map_grid_size = x.shape
         self.x = x
@@ -39,6 +44,7 @@ class SplinePlot(threading.Thread):
             self.plot_slam()
     
     def plot_slam(self):
+        traj_points = self.traj.get_trajectory()
         map_value = self.slam_map.evaluate_map(self.map_pts).reshape(self.map_grid_size)
         self.ax.pcolormesh( self.x, 
                             self.y, 
@@ -46,7 +52,10 @@ class SplinePlot(threading.Thread):
                             cmap='binary',
                             vmax = self.logodd_max_occupied, 
                             vmin= self.logodd_min_free)
-        self.fig.savefig('intel' + '.png')
+        self.traj_marker.set_xdata(traj_points[0,:])
+        self.traj_marker.set_ydata(traj_points[1,:])
+        self.ax.axis('equal')
+        self.fig.savefig('spline_map' + '.png')
 
 
 
