@@ -4,7 +4,7 @@ from spline_slam.core import SplineLocalization
 from spline_slam.core import SplineMap
 from spline_slam.spline import Odometry
 from spline_slam.spline import SplinePlot
-from spline_slam.spline import CubicSplineSurface
+from spline_slam.basics import CubicSplineSurface
 from spline_slam.trajectory import DiscreteTrajectory
 
 import sys
