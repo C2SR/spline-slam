@@ -1,7 +1,7 @@
 import numpy as np
 
-from spline_slam.spline import SplineLocalization
-from spline_slam.spline import SplineMap
+from spline_slam.core import SplineLocalization
+from spline_slam.core import SplineMap
 from spline_slam.spline import Odometry
 from spline_slam.spline import SplinePlot
 from spline_slam.spline import CubicSplineSurface
