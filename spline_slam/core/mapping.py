@@ -4,7 +4,7 @@ import time
 import random
 import scipy.sparse.linalg
 
-class SplineMap:
+class Mapping:
     def __init__(self, spline_map, **kwargs):
         # Parameters
         min_angle = kwargs['min_angle'] if 'min_angle' in kwargs else 0.

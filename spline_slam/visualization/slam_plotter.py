@@ -3,7 +3,7 @@ import numpy as np
 import threading
 import time
 
-class SplinePlot(threading.Thread):
+class SLAMPlotter(threading.Thread):
     def __init__(self, slam_map, traj, **kwargs):
         logodd_min_free = kwargs['logodd_min_free'] if 'logodd_min_free' in kwargs else -100
         logodd_max_occupied = kwargs['logodd_max_occupied'] if 'logodd_max_occupied' in kwargs else 100

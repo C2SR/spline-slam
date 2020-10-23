@@ -1,6 +1,6 @@
 import numpy as np
 
-class Odometry:
+class Nonholonomic:
     def __init__(self, **kwargs):
         self.previous_pose = np.zeros(3)
         self.previous_timestamp = None
