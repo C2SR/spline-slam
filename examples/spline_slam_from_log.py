@@ -42,10 +42,10 @@ def main():
         multi_res_localization[res] = ScanMatching(multi_res_map[res], **kwargs_spline)
         multi_res_mapping[res] = Mapping(multi_res_map[res], **kwargs_spline)
 
-    # Odometry (Class)
+    # Odometry 
     odometry = Nonholonomic()
 
-    # Trajectory (Class)
+    # Trajectory 
     traj = DiscreteTrajectory()
 
     # Plot
