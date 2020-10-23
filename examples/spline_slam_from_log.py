@@ -5,19 +5,10 @@ from spline_slam.spline import SplineMap
 from spline_slam.spline import Odometry
 from spline_slam.spline import SplinePlot
 from spline_slam.spline import CubicSplineSurface
+from spline_slam.trajectory import DiscreteTrajectory
 
 import sys
 import time
-
-class DiscreteTrajectory:
-    def __init__(self, pose_init = np.array([.0,.0,.0])):
-        self.traj = pose_init.reshape(3,1)
-
-    def update(self, pose):
-        self.traj = np.hstack([self.traj, pose.reshape(3,1)])
-
-    def get_trajectory(self):
-        return self.traj
 
 def main():
     if len(sys.argv) < 2:
