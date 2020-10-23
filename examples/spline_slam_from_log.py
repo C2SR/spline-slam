@@ -3,7 +3,7 @@ import numpy as np
 from spline_slam.core import SplineLocalization
 from spline_slam.core import SplineMap
 from spline_slam.vehicle import Odometry
-from spline_slam.spline import SplinePlot
+from spline_slam.visualization import SplinePlot
 from spline_slam.basics import CubicSplineSurface
 from spline_slam.trajectory import DiscreteTrajectory
 
