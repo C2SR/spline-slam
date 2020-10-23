@@ -1,3 +1,3 @@
-from .mapping import SplineMap
-from .scan_matching import SplineLocalization
+from .mapping import Mapping
+from .scan_matching import ScanMatching
 

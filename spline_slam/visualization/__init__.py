@@ -1,1 +1,1 @@
-from .spline_plot import SplinePlot
+from .slam_plotter import SLAMPlotter

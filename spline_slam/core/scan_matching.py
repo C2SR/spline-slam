@@ -3,7 +3,7 @@ import math
 import time
 from scipy.optimize import least_squares
 
-class SplineLocalization:
+class ScanMatching:
     def __init__(self, spline_map, **kwargs): 
         # Parameters
         min_angle = kwargs['min_angle'] if 'min_angle' in kwargs else 0.

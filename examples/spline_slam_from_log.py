@@ -1,9 +1,9 @@
 import numpy as np
 
-from spline_slam.core import SplineLocalization
-from spline_slam.core import SplineMap
-from spline_slam.vehicle import Odometry
-from spline_slam.visualization import SplinePlot
+from spline_slam.core import Mapping
+from spline_slam.core import ScanMatching
+from spline_slam.odometry import Nonholonomic
+from spline_slam.visualization import SLAMPlotter
 from spline_slam.basics import CubicSplineSurface
 from spline_slam.trajectory import DiscreteTrajectory
 
@@ -14,9 +14,6 @@ def main():
     if len(sys.argv) < 2:
         print("You must enter a file name")
         sys.exit(-1)
-
-    file_name = sys.argv[1]
-    input_param = sys.argv[2] #int(sys.argv[2])
 
     # Instantiating the grid map object
     multi_res_localization = {}
@@ -42,20 +39,21 @@ def main():
                         'alpha': 1}
         
         multi_res_map[res] = CubicSplineSurface(**kwargs_spline)
-        multi_res_localization[res] = SplineLocalization(multi_res_map[res], **kwargs_spline)
-        multi_res_mapping[res] = SplineMap(multi_res_map[res], **kwargs_spline)
+        multi_res_localization[res] = ScanMatching(multi_res_map[res], **kwargs_spline)
+        multi_res_mapping[res] = Mapping(multi_res_map[res], **kwargs_spline)
 
     # Odometry (Class)
-    odometry = Odometry()
+    odometry = Nonholonomic()
 
     # Trajectory (Class)
     traj = DiscreteTrajectory()
 
     # Plot
-    plot_thread = SplinePlot(multi_res_mapping[nb_resolution-1], traj, **kwargs_spline)
+    plot_thread = SLAMPlotter(multi_res_mapping[nb_resolution-1], traj, **kwargs_spline)
     plot_thread.start()
 
     # Opening log file
+    file_name = sys.argv[1]
     file_handle = open(file_name, "r")
     # Retrieving sensor parameters
     data = file_handle.readline()  
