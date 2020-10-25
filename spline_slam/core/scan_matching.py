@@ -40,18 +40,6 @@ class ScanMatching:
         # Time
         self.time = np.zeros(3)  
 
-    """Removes spurious (out of range) measurements
-        Input: ranges np.array<float>
-    """ 
-    def remove_spurious_measurements(self, ranges):
-        # Finding indices of the valid ranges
-        ind_occ = np.logical_and(ranges >= self.range_min, ranges < self.range_max)
-        return ranges[ind_occ], self.angles[ind_occ]
-
-    """ Transforms ranges measurements to (x,y) coordinates (local frame) """
-    def range_to_coordinate(self, ranges, angles):
-        angles = np.array([np.cos(angles), np.sin(angles)]) 
-        return ranges * angles 
 
     """ Transform an [2xn] array of (x,y) coordinates to the global frame
         Input: pose np.array<float(3,1)> describes (x,y,theta)'
@@ -134,21 +122,16 @@ class ScanMatching:
         return r
 
     """"Occupancy grid mapping routine to update map using range measurements"""
-    def update_localization(self, ranges, pose_estimative=None, unreliable_odometry=False):
+    def update_localization(self, sensor,  pose_estimative=None, unreliable_odometry=False):
         if pose_estimative is None:
             pose_estimative = np.copy(self.pose)
 
-        # Removing spurious measurements
-        tic = time.clock()
-        ranges_occ, angles = self.remove_spurious_measurements(ranges)
-        self.time[0] += time.clock() - tic
-        # Converting range measurements to metric coordinates
-        tic = time.clock()
-        pts_occ_local = self.range_to_coordinate(ranges_occ, angles)
-        self.time[1] += time.clock() - tic
-        # Localization
+        pts_occ_local = sensor.get_occupied_pts()
+
+        # Scan-matching
         tic = time.clock()      
         best_cost_estimate = np.inf
+        # If odometry is poor search with different orientations
         if unreliable_odometry:
             candidate = [0, np.pi/4., -np.pi/4., np.pi/2., -np.pi/2, -1.5*np.pi, -1.5*np.pi]
         else:

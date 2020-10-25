@@ -8,7 +8,7 @@ class Mapping:
     def __init__(self, spline_map, **kwargs):
         # Parameters
         min_angle = kwargs['min_angle'] if 'min_angle' in kwargs else 0.
-        max_angle = kwargs['max_angle'] if 'max_angle' in kwargs else 2.*np.pi - 1.*np.pi/180.
+        max_angle = kwargs['max_angle'] if 'max_angle' in kwargs else 2.*np.pi 
         angle_increment = kwargs['angle_increment'] if 'angle_increment' in kwargs else 1.*np.pi/180.
         range_min = kwargs['range_min'] if 'range_min' in kwargs else 0.12
         range_max = kwargs['range_max'] if 'range_max' in kwargs else 3.6
@@ -25,7 +25,7 @@ class Mapping:
         self.logodd_free = logodd_free
         self.logodd_min_free = logodd_min_free
         self.logodd_max_occupied = logodd_max_occupied
-        self.free_detection_spacing = 2*self.map.knot_space 
+        self.free_detection_spacing = 2*.05
         self.free_ranges = np.arange(max(self.map.knot_space, range_min), range_max, self.free_detection_spacing)       
         
         # Sensor scan parameters
@@ -38,24 +38,10 @@ class Mapping:
         self.sensor_subsampling_factor = max(divmod(len(self.angles),max_nb_rays)[0],1)
 
         # Storing ranges for speed up 
-        self.free_ranges_matrix = np.tile(self.free_ranges.reshape(-1,1), (1,len(self.angles)))
         self.ray_matrix_x = self.free_ranges.reshape(-1,1) * np.cos(self.angles)
         self.ray_matrix_y = self.free_ranges.reshape(-1,1) * np.sin(self.angles)    
         self.time = np.zeros(5)           
-
-    """Removes spurious (out of range) measurements
-        Input: ranges np.array<float>
-    """ 
-    def remove_spurious_measurements(self, ranges):
-        # Finding indices of the valid ranges
-        ind_occ = np.logical_and(ranges >= self.range_min, ranges < self.range_max)
-        return ranges[ind_occ], self.angles[ind_occ]
-
-    """ Transforms ranges measurements to (x,y) coordinates (local frame) """
-    def range_to_coordinate(self, ranges, angles):
-        direction = np.array([np.cos(angles), np.sin(angles)]) 
-        return  ranges * direction
-    
+  
     """ Transform an [2xn] array of (x,y) coordinates to the global frame
         Input: pose np.array<float(3,1)> describes (x,y,theta)'
     """
@@ -63,25 +49,6 @@ class Mapping:
         c, s = np.cos(pose[2]), np.sin(pose[2])
         R = np.array([[c, -s],[s, c]])
         return np.matmul(R, local) + pose[0:2].reshape(2,1) 
-
-    """ Detect free space """
-    def detect_free_space(self, ranges):      
-        ranges_free = ranges + self.map.knot_space
-        init = int(np.random.rand()*self.sensor_subsampling_factor)
-        index_free =  np.where((ranges_free >= self.range_min) & (ranges  <= self.range_max))[0][init::self.sensor_subsampling_factor]
-        index_free_matrix = self.free_ranges_matrix[:,index_free] <  \
-                            (ranges_free[index_free]).reshape([1,-1])
-
-        #index_free_matrix[:,0:-1] = np.logical_and(index_free_matrix[:,0:-1], index_free_matrix[:,1:]) 
-        #index_free_matrix[:,1:] = np.logical_and(index_free_matrix[:,1:], index_free_matrix[:,0:-1])  
-
-        pts_free = np.vstack([self.ray_matrix_x[:, index_free][index_free_matrix],
-                            self.ray_matrix_y[:, index_free][index_free_matrix]]) 
-
-        if pts_free.size == 0:
-            pts_free = np.zeros([2,1])
-
-        return pts_free 
 
     """"Update the control points of the spline map"""
     def update_spline_map(self, pts_occ, pts_free, pose):
@@ -124,25 +91,18 @@ class Mapping:
         return s
 
     """"Occupancy grid mapping routine to update map using range measurements"""
-    def update_map(self, pose, ranges):
-        # Removing spurious measurements
-        tic = time.clock()
-        ranges_occ, angles_occ = self.remove_spurious_measurements(ranges)
-        self.time[0] += time.clock() - tic
-        # Converting range measurements to metric coordinates
-        tic = time.clock()
-        pts_occ_local = self.range_to_coordinate(ranges_occ, angles_occ)
-        self.time[1] += time.clock() - tic
-        # Detecting free cells in metric coordinates
-        tic = time.clock()
-        pts_free_local  = self.detect_free_space(ranges)
-        self.time[2] += time.clock() - tic
-        # Transforming metric coordinates from the local to the global frame
+    def update_map(self, sensor, pose):
+        # collect occupied/free space from sensor
+        pts_occ_local = sensor.get_occupied_pts()
+        pts_free_local = sensor.get_free_pts()
+ 
+         # Transforming metric coordinates from the local to the global frame
         tic = time.clock()
         pts_occ = self.local_to_global_frame(pose,pts_occ_local)
         pts_free = self.local_to_global_frame(pose,pts_free_local)
         self.time[3] += time.clock() - tic
-        # Compute spline
+
+        # Update spline map
         tic = time.clock()
         self.update_spline_map(pts_occ,  pts_free, pose)
         self.time[4] += time.clock() - tic
