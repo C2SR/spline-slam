@@ -6,36 +6,18 @@ from scipy.optimize import least_squares
 class ScanMatching:
     def __init__(self, spline_map, **kwargs): 
         # Parameters
-        min_angle = kwargs['min_angle'] if 'min_angle' in kwargs else 0.
-        max_angle = kwargs['max_angle'] if 'max_angle' in kwargs else 2.*np.pi 
-        angle_increment = kwargs['angle_increment'] if 'angle_increment' in kwargs else 1.*np.pi/180.
-        range_min = kwargs['range_min'] if 'range_min' in kwargs else 0.12
-        range_max = kwargs['range_max'] if 'range_max' in kwargs else 3.5
         logodd_min_free = kwargs['logodd_min_free'] if 'logodd_min_free' in kwargs else -100
         logodd_max_occupied = kwargs['logodd_max_occupied'] if 'logodd_max_occupied' in kwargs else 100
-        det_Hinv_threshold = kwargs['det_Hinv_threshold'] if 'det_Hinv_threshold' in kwargs else 1e-3
         nb_iteration_max = kwargs['nb_iteration_max'] if 'nb_iteration_max' in kwargs else 10
-        alpha = kwargs['alpha'] if 'alpha' in kwargs else 2
 
         # LogOdd Map parameters
         self.map = spline_map
         self.logodd_min_free = logodd_min_free
         self.logodd_max_occupied = logodd_max_occupied
 
-        # Sensor scan parameters
-        self.min_angle = min_angle
-        self.max_angle = max_angle 
-        self.angle_increment = angle_increment
-        self.range_min = range_min
-        self.range_max = range_max
-        self.angles = np.arange(min_angle, max_angle, angle_increment )                
-
         # Localization parameters
         self.nb_iteration_max = nb_iteration_max        
-        self.det_Hinv_threshold = det_Hinv_threshold
         self.pose = np.zeros(3)
-        self.alpha = alpha
-        self.sensor_subsampling_factor = 1 
         
         # Time
         self.time = np.zeros(3)  
@@ -59,9 +41,9 @@ class ScanMatching:
 
         self.threshold_c_index = .05*16*pts_occ_local.shape[1]
 
-        res = least_squares(self.scipy_cost_function, 
+        res = least_squares(self.compute_cost_function, 
                             pose_estimate,
-                            jac = self.scipy_jacobian, 
+                            jac = self.compute_jacobian, 
                             verbose = 0, 
                             method='lm',
                             loss='linear',
@@ -72,7 +54,7 @@ class ScanMatching:
 
         return res.x, res.cost
 
-    def scipy_jacobian(self, pose, pts_occ_local_x, pts_occ_local_y):
+    def compute_jacobian(self, pose, pts_occ_local_x, pts_occ_local_y):
         # Recompute jacobian only if change in control points is above threshold_c_index
         if self.c_index_change < self.threshold_c_index:
             return self.h_occ.T
@@ -104,7 +86,7 @@ class ScanMatching:
 
         return h_occ.T
 
-    def scipy_cost_function(self, pose, pts_occ_local_x, pts_occ_local_y):
+    def compute_cost_function(self, pose, pts_occ_local_x, pts_occ_local_y):
         # computing alignment error
         pts_occ_local = np.vstack([pts_occ_local_x, pts_occ_local_y])
         pts_occ = self.local_to_global_frame(pose, pts_occ_local)

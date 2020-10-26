@@ -31,7 +31,7 @@ def main():
                         'angle_max': 359*np.pi/180., #(129.75-5)*np.pi/180,
                         'number_beams': 360,
                         'range_min': 0.05,
-                        'range_max': 5.0, #49.9, 
+                        'range_max': 4.9, #49.9, 
                         'logodd_occupied': 1., 
                         'logodd_free': .1, 
                         'logodd_min_free': -25.,

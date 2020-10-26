@@ -21,16 +21,14 @@ class Lidar:
         self.angles = np.linspace(self.angle_min, self.angle_max, self.number_beams)
         self.beam_samples = np.arange(self.range_min, self.range_max, self.free_detection_spacing).reshape([-1,1])       
 
-        # Storing ranges for speed up 
+        # Storing beam samples in memory for speed up 
         self.beam_matrix_x = self.beam_samples.reshape(-1,1) * np.cos(self.angles)
         self.beam_matrix_y = self.beam_samples.reshape(-1,1) * np.sin(self.angles)    
 
     def update(self, ranges, **kwargs):
-        self.occupied_ranges, self.occupied_angles = self.filter_occupied_ranges(ranges)        
-        self.free_ranges, self.free_angles = self.filter_free_ranges(ranges)
-        
-        self.occupied_pts = self.range_to_coordinate(self.occupied_ranges, self.occupied_angles)
-        self.free_pts = self.detect_free_space(ranges)
+        occupied_ranges, occupied_angles = self.filter_occupied_ranges(ranges)              
+        self.occupied_pts = self.range_to_coordinate(occupied_ranges, occupied_angles)
+        self.free_pts = self.compute_free_space(ranges)
 
     def filter_occupied_ranges(self, ranges):
         index = np.logical_and(ranges >= self.range_min, ranges < self.range_max)
@@ -38,17 +36,11 @@ class Lidar:
         occupied_angles = self.angles[index]
         return occupied_ranges, occupied_angles
 
-    def filter_free_ranges(self, ranges):
-        index = ranges >= self.range_min
-        free_ranges = np.minimum(ranges[index], self.range_max)
-        free_angles = self.angles[index]
-        return free_ranges, free_angles
-
     def range_to_coordinate(self, ranges, angles):
         direction = np.array([np.cos(angles), np.sin(angles)]) 
         return  ranges * direction
 
-    def detect_free_space(self, ranges):      
+    def compute_free_space(self, ranges):      
         index_free =  np.where((ranges >= self.range_min) & (ranges  <= self.range_max))[0]
         index_free_matrix = self.beam_samples  < (ranges[index_free]).reshape([1,-1])
         pts_free = np.vstack([self.beam_matrix_x[:, index_free][index_free_matrix],
@@ -57,12 +49,6 @@ class Lidar:
             pts_free = np.zeros([2,1])
 
         return pts_free  
-
-    def get_occupied_ranges(self):
-        return self.occupied_ranges, self.occupied_angles
-
-    def get_free_ranges(self):
-        return self.free_ranges, self.free_angles
 
     def get_occupied_pts(self):
         return self.occupied_pts

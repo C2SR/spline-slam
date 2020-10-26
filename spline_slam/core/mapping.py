@@ -7,11 +7,6 @@ import scipy.sparse.linalg
 class Mapping:
     def __init__(self, spline_map, **kwargs):
         # Parameters
-        min_angle = kwargs['min_angle'] if 'min_angle' in kwargs else 0.
-        max_angle = kwargs['max_angle'] if 'max_angle' in kwargs else 2.*np.pi 
-        angle_increment = kwargs['angle_increment'] if 'angle_increment' in kwargs else 1.*np.pi/180.
-        range_min = kwargs['range_min'] if 'range_min' in kwargs else 0.12
-        range_max = kwargs['range_max'] if 'range_max' in kwargs else 3.6
         logodd_occupied = kwargs['logodd_occupied'] if 'logodd_occupied' in kwargs else .9
         logodd_free = kwargs['logodd_free'] if 'logodd_free' in kwargs else .3
         logodd_min_free = kwargs['logodd_min_free'] if 'logodd_min_free' in kwargs else -100
@@ -25,21 +20,7 @@ class Mapping:
         self.logodd_free = logodd_free
         self.logodd_min_free = logodd_min_free
         self.logodd_max_occupied = logodd_max_occupied
-        self.free_detection_spacing = 2*.05
-        self.free_ranges = np.arange(max(self.map.knot_space, range_min), range_max, self.free_detection_spacing)       
-        
-        # Sensor scan parameters
-        self.min_angle = min_angle
-        self.max_angle = max_angle 
-        self.angle_increment = angle_increment
-        self.range_min = range_min
-        self.range_max = range_max
-        self.angles = np.arange(min_angle, max_angle, angle_increment )
-        self.sensor_subsampling_factor = max(divmod(len(self.angles),max_nb_rays)[0],1)
 
-        # Storing ranges for speed up 
-        self.ray_matrix_x = self.free_ranges.reshape(-1,1) * np.cos(self.angles)
-        self.ray_matrix_y = self.free_ranges.reshape(-1,1) * np.sin(self.angles)    
         self.time = np.zeros(5)           
   
     """ Transform an [2xn] array of (x,y) coordinates to the global frame
