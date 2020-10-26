@@ -32,7 +32,7 @@ class ScanMatching:
         return np.matmul(R, local) + pose[0:2].reshape(2,1)
     
     """ Estimate pose (core function) """
-    def compute_pose(self, pose_estimate, pts_occ_local, ftol=1e-3, max_nfev=5):
+    def compute_pose(self, pose_estimate, pts_occ_local, ftol=1e-3, max_nfev=15):
         self.flag = False
 
         self.c_index_change = np.inf

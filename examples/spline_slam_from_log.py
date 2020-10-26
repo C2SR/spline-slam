@@ -21,7 +21,7 @@ def main():
     multi_res_localization = {}
     multi_res_mapping = {}
     multi_res_map = {}
-    nb_resolution = 3
+    nb_resolution = 1
     
     for res in range(0,nb_resolution):
         max_nb_rays = 360#*(res+1)
@@ -38,7 +38,6 @@ def main():
                         'logodd_max_occupied': 25., 
                         'nb_iteration_max': 50,
                         'max_nb_rays': max_nb_rays,
-                        'alpha': 1,
                         'free_detection_spacing': .1}
         
         multi_res_map[res] = CubicSplineSurface(**kwargs_spline)
@@ -55,7 +54,7 @@ def main():
     traj = DiscreteTrajectory()
 
     # Plot
-    plot_thread = SLAMPlotter(multi_res_mapping[nb_resolution-1], traj, **kwargs_spline)
+    plot_thread = SLAMPlotter(multi_res_mapping[nb_resolution-1], traj, lidar, **kwargs_spline)
     plot_thread.start()
 
     # Opening log file
