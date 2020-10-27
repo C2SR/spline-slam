@@ -8,7 +8,7 @@ class Lidar:
         assert 'number_beams' in kwargs, "[sensor.lidar] Fail to initialize number_beams"
         assert 'range_min' in kwargs, "[sensor.lidar] Fail to initialize range_min"
         assert 'range_max' in kwargs, "[sensor.lidar] Fail to initialize angle_max"
-        assert 'free_detection_spacing' in kwargs, "[sensor.lidar] Fail to initialize free_detection_spacing"
+        assert 'free_samples_interval' in kwargs, "[sensor.lidar] Fail to initialize free_samples_interval"
 
         # Sensor scan parameters
         self.angle_min = kwargs['angle_min'] 
@@ -16,16 +16,16 @@ class Lidar:
         self.number_beams = kwargs['number_beams']
         self.range_min = kwargs['range_min']
         self.range_max = kwargs['range_max']
-        self.free_detection_spacing = kwargs['free_detection_spacing']
+        self.free_samples_interval = kwargs['free_samples_interval']
  
         self.angles = np.linspace(self.angle_min, self.angle_max, self.number_beams)
-        self.beam_samples = np.arange(self.range_min, self.range_max, self.free_detection_spacing).reshape([-1,1])       
+        self.beam_samples = np.arange(self.range_min, self.range_max, self.free_samples_interval).reshape([-1,1])       
 
         # Storing beam samples in memory for speed up 
         self.beam_matrix_x = self.beam_samples.reshape(-1,1) * np.cos(self.angles)
         self.beam_matrix_y = self.beam_samples.reshape(-1,1) * np.sin(self.angles)    
 
-    def update(self, ranges, **kwargs):
+    def process_new_measurements(self, ranges, **kwargs):
         occupied_ranges, occupied_angles = self.filter_occupied_ranges(ranges)              
         self.occupied_pts = self.range_to_coordinate(occupied_ranges, occupied_angles)
         self.free_pts = self.compute_free_space(ranges)
