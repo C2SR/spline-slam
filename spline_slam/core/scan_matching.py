@@ -6,52 +6,22 @@ from scipy.optimize import least_squares
 class ScanMatching:
     def __init__(self, spline_map, **kwargs): 
         # Parameters
-        min_angle = kwargs['min_angle'] if 'min_angle' in kwargs else 0.
-        max_angle = kwargs['max_angle'] if 'max_angle' in kwargs else 2.*np.pi 
-        angle_increment = kwargs['angle_increment'] if 'angle_increment' in kwargs else 1.*np.pi/180.
-        range_min = kwargs['range_min'] if 'range_min' in kwargs else 0.12
-        range_max = kwargs['range_max'] if 'range_max' in kwargs else 3.5
         logodd_min_free = kwargs['logodd_min_free'] if 'logodd_min_free' in kwargs else -100
         logodd_max_occupied = kwargs['logodd_max_occupied'] if 'logodd_max_occupied' in kwargs else 100
-        det_Hinv_threshold = kwargs['det_Hinv_threshold'] if 'det_Hinv_threshold' in kwargs else 1e-3
         nb_iteration_max = kwargs['nb_iteration_max'] if 'nb_iteration_max' in kwargs else 10
-        alpha = kwargs['alpha'] if 'alpha' in kwargs else 2
 
         # LogOdd Map parameters
         self.map = spline_map
         self.logodd_min_free = logodd_min_free
         self.logodd_max_occupied = logodd_max_occupied
 
-        # Sensor scan parameters
-        self.min_angle = min_angle
-        self.max_angle = max_angle 
-        self.angle_increment = angle_increment
-        self.range_min = range_min
-        self.range_max = range_max
-        self.angles = np.arange(min_angle, max_angle, angle_increment )                
-
         # Localization parameters
         self.nb_iteration_max = nb_iteration_max        
-        self.det_Hinv_threshold = det_Hinv_threshold
         self.pose = np.zeros(3)
-        self.alpha = alpha
-        self.sensor_subsampling_factor = 1 
         
         # Time
         self.time = np.zeros(3)  
 
-    """Removes spurious (out of range) measurements
-        Input: ranges np.array<float>
-    """ 
-    def remove_spurious_measurements(self, ranges):
-        # Finding indices of the valid ranges
-        ind_occ = np.logical_and(ranges >= self.range_min, ranges < self.range_max)
-        return ranges[ind_occ], self.angles[ind_occ]
-
-    """ Transforms ranges measurements to (x,y) coordinates (local frame) """
-    def range_to_coordinate(self, ranges, angles):
-        angles = np.array([np.cos(angles), np.sin(angles)]) 
-        return ranges * angles 
 
     """ Transform an [2xn] array of (x,y) coordinates to the global frame
         Input: pose np.array<float(3,1)> describes (x,y,theta)'
@@ -62,7 +32,7 @@ class ScanMatching:
         return np.matmul(R, local) + pose[0:2].reshape(2,1)
     
     """ Estimate pose (core function) """
-    def compute_pose(self, pose_estimate, pts_occ_local, ftol=1e-3, max_nfev=5):
+    def compute_pose(self, pose_estimate, pts_occ_local, ftol=1e-3, max_nfev=15):
         self.flag = False
 
         self.c_index_change = np.inf
@@ -71,9 +41,9 @@ class ScanMatching:
 
         self.threshold_c_index = .05*16*pts_occ_local.shape[1]
 
-        res = least_squares(self.scipy_cost_function, 
+        res = least_squares(self.compute_cost_function, 
                             pose_estimate,
-                            jac = self.scipy_jacobian, 
+                            jac = self.compute_jacobian, 
                             verbose = 0, 
                             method='lm',
                             loss='linear',
@@ -84,7 +54,7 @@ class ScanMatching:
 
         return res.x, res.cost
 
-    def scipy_jacobian(self, pose, pts_occ_local_x, pts_occ_local_y):
+    def compute_jacobian(self, pose, pts_occ_local_x, pts_occ_local_y):
         # Recompute jacobian only if change in control points is above threshold_c_index
         if self.c_index_change < self.threshold_c_index:
             return self.h_occ.T
@@ -116,7 +86,7 @@ class ScanMatching:
 
         return h_occ.T
 
-    def scipy_cost_function(self, pose, pts_occ_local_x, pts_occ_local_y):
+    def compute_cost_function(self, pose, pts_occ_local_x, pts_occ_local_y):
         # computing alignment error
         pts_occ_local = np.vstack([pts_occ_local_x, pts_occ_local_y])
         pts_occ = self.local_to_global_frame(pose, pts_occ_local)
@@ -134,21 +104,16 @@ class ScanMatching:
         return r
 
     """"Occupancy grid mapping routine to update map using range measurements"""
-    def update_localization(self, ranges, pose_estimative=None, unreliable_odometry=False):
+    def update_localization(self, sensor,  pose_estimative=None, unreliable_odometry=False):
         if pose_estimative is None:
             pose_estimative = np.copy(self.pose)
 
-        # Removing spurious measurements
-        tic = time.clock()
-        ranges_occ, angles = self.remove_spurious_measurements(ranges)
-        self.time[0] += time.clock() - tic
-        # Converting range measurements to metric coordinates
-        tic = time.clock()
-        pts_occ_local = self.range_to_coordinate(ranges_occ, angles)
-        self.time[1] += time.clock() - tic
-        # Localization
+        pts_occ_local = sensor.get_occupied_pts()
+
+        # Scan-matching
         tic = time.clock()      
         best_cost_estimate = np.inf
+        # If odometry is poor search with different orientations
         if unreliable_odometry:
             candidate = [0, np.pi/4., -np.pi/4., np.pi/2., -np.pi/2, -1.5*np.pi, -1.5*np.pi]
         else:
