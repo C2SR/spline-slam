@@ -130,3 +130,7 @@ dmypy.json
 
 # Images
 *.png
+
+# ROS 
+devel/
+.catkin_workspace
