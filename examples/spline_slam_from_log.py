@@ -21,7 +21,7 @@ def main():
     multi_res_localization = {}
     multi_res_mapping = {}
     multi_res_map = {}
-    nb_resolution = 1
+    nb_resolution = 2
     
     for res in range(0,nb_resolution):
         max_nb_rays = 360#*(res+1)
@@ -38,7 +38,7 @@ def main():
                         'logodd_max_occupied': 25., 
                         'nb_iteration_max': 50,
                         'max_nb_rays': max_nb_rays,
-                        'free_detection_spacing': .1}
+                        'free_samples_interval': .15}
         
         multi_res_map[res] = CubicSplineSurface(**kwargs_spline)
         multi_res_localization[res] = ScanMatching(multi_res_map[res], **kwargs_spline)
@@ -73,7 +73,7 @@ def main():
         ranges = data[4:]
         
         ########### Localization #############
-        lidar.update(ranges)
+        lidar.process_new_measurements(ranges)
         for res in range(0, nb_resolution):
             if num < 3:
                 odom, dt = odometry.pose_to_discrete_odometry(timestamp, pose) 
@@ -110,7 +110,6 @@ def main():
             1./(localization_time/num), 
             1./(mapping_time/num + localization_time/num) )  
 
-        ########### Statistics ###########
         # Relations file
         # print(timestamp, pose[0], pose[1], pose[2])
     plot_thread.deactivate()
