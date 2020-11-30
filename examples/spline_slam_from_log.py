@@ -2,7 +2,6 @@ import numpy as np
 
 from spline_slam.core import Mapping
 from spline_slam.core import ScanMatching
-from spline_slam.odometry import Nonholonomic
 from spline_slam.visualization import SLAMPlotter
 from spline_slam.basics import CubicSplineSurface
 from spline_slam.trajectory import DiscreteTrajectory
@@ -21,21 +20,21 @@ def main():
     multi_res_localization = {}
     multi_res_mapping = {}
     multi_res_map = {}
-    nb_resolution = 2
+    nb_resolution = 3
     
     for res in range(0,nb_resolution):
         max_nb_rays = 360#*(res+1)
-        kwargs_spline= {'knot_space': .05*((2.5)**(nb_resolution-res-1)), #2.5 
+        kwargs_spline= {'knot_interval': .05*(2**(nb_resolution-res-1)), #2.5 
                         'surface_size': np.array([150.,150.]),
                         'angle_min': 0*np.pi/180., # -(130-5)*np.pi/180,
                         'angle_max': 359*np.pi/180., #(129.75-5)*np.pi/180,
                         'number_beams': 360,
                         'range_min': 0.05,
                         'range_max': 4.9, #49.9, 
-                        'logodd_occupied': 1., 
+                        'logodd_occ': 1., 
                         'logodd_free': .1, 
                         'logodd_min_free': -25.,
-                        'logodd_max_occupied': 25., 
+                        'logodd_max_occ': 25., 
                         'nb_iteration_max': 50,
                         'max_nb_rays': max_nb_rays,
                         'free_samples_interval': .15}
@@ -47,9 +46,6 @@ def main():
     # Sensor
     lidar = Lidar(**kwargs_spline)
 
-    # Odometry 
-    odometry = Nonholonomic()
-
     # Trajectory 
     traj = DiscreteTrajectory()
 
@@ -60,11 +56,11 @@ def main():
     # Opening log file
     file_name = sys.argv[1]
     file_handle = open(file_name, "r")
+
     # Retrieving sensor parameters
     data = file_handle.readline()  
     data = np.fromstring( data, dtype=np.float, sep=' ' )
     
-    is_odometry_poor = False
     for num, data in enumerate(file_handle, start=1):
         ######### Collecting data from log ##########
         data = np.fromstring( data, dtype=np.float, sep=' ' )
@@ -73,26 +69,22 @@ def main():
         ranges = data[4:]
         
         ########### Localization #############
-        lidar.process_new_measurements(ranges)
+        lidar.update(ranges)
+        
         for res in range(0, nb_resolution):
-            if num < 3:
-                odom, dt = odometry.pose_to_discrete_odometry(timestamp, pose) 
+            if num < 5:
+                pass
             else:
-                ###### Odometry ######
                 if res==0:
-                    odom, dt = odometry.pose_to_discrete_odometry(timestamp, pose)
-                    pose_estimative = odometry.update(multi_res_localization[nb_resolution-1].pose, odom)
-                    if dt > 1.:
-                        is_odometry_poor = True
+                    pose_prior = multi_res_localization[nb_resolution-1].pose
                 else:
-                    pose_estimative = np.copy(multi_res_localization[res-1].pose)                
+                    pose_prior = multi_res_localization[res-1].pose                
                 ###### Scan matching ######
-                multi_res_localization[res].update_localization(lidar, pose_estimative, is_odometry_poor)
-                is_odometry_poor = False
-    
+                multi_res_localization[res].update(ranges, pose_prior)
+        
         ############# Mapping ################
         for res in range(0, nb_resolution):
-            multi_res_mapping[res].update_map(lidar, multi_res_localization[nb_resolution-1].pose)
+            multi_res_mapping[res].update(ranges, multi_res_localization[nb_resolution-1].pose)
 
         ############# Trajectory ################
         pose = multi_res_localization[nb_resolution-1].pose

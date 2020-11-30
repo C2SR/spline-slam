@@ -6,13 +6,13 @@ import time
 class SLAMPlotter(threading.Thread):
     def __init__(self, slam_map, traj, sensor, **kwargs):
         logodd_min_free = kwargs['logodd_min_free'] if 'logodd_min_free' in kwargs else -100
-        logodd_max_occupied = kwargs['logodd_max_occupied'] if 'logodd_max_occupied' in kwargs else 100
+        logodd_max_occ = kwargs['logodd_max_occ'] if 'logodd_max_occ' in kwargs else 100
         sleep_time = kwargs['plot_sleep_time'] if 'plot_sleep_time' in kwargs else 15
 
         # SLAM
         self.slam_map = slam_map
         self.logodd_min_free = logodd_min_free
-        self.logodd_max_occupied = logodd_max_occupied
+        self.logodd_max_occ = logodd_max_occ
         self.sleep_time = sleep_time
         
         # Figures
@@ -67,7 +67,7 @@ class SLAMPlotter(threading.Thread):
                             self.y, 
                             map_value, 
                             cmap='binary',
-                            vmax = self.logodd_max_occupied, 
+                            vmax = self.logodd_max_occ, 
                             vmin= self.logodd_min_free)
         # Trajectory
         self.traj_marker.set_xdata(traj_points[0,:])
