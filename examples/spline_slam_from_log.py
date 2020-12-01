@@ -6,7 +6,7 @@ from spline_slam.visualization import SLAMPlotter
 from spline_slam.basics import CubicSplineSurface
 from spline_slam.trajectory import DiscreteTrajectory
 from spline_slam.sensor import Lidar
-
+from spline_slam.estimator import EKF
 
 import sys
 import time
@@ -16,11 +16,11 @@ def main():
         print("You must enter a file name")
         sys.exit(-1)
 
-    # Instantiating the grid map object
+    # Instantiating slam object
     multi_res_localization = {}
     multi_res_mapping = {}
     multi_res_map = {}
-    nb_resolution = 3
+    nb_resolution = 1
     
     for res in range(0,nb_resolution):
         max_nb_rays = 360#*(res+1)
@@ -49,6 +49,9 @@ def main():
     # Trajectory 
     traj = DiscreteTrajectory()
 
+    # Full state estimator
+    ekf = EKF()
+
     # Plot
     plot_thread = SLAMPlotter(multi_res_mapping[nb_resolution-1], traj, lidar, **kwargs_spline)
     plot_thread.start()
@@ -60,7 +63,7 @@ def main():
     # Retrieving sensor parameters
     data = file_handle.readline()  
     data = np.fromstring( data, dtype=np.float, sep=' ' )
-    
+    previous_timestamp = 0
     for num, data in enumerate(file_handle, start=1):
         ######### Collecting data from log ##########
         data = np.fromstring( data, dtype=np.float, sep=' ' )
@@ -76,7 +79,9 @@ def main():
                 pass
             else:
                 if res==0:
-                    pose_prior = multi_res_localization[nb_resolution-1].pose
+                    dt = timestamp - previous_timestamp
+                    pose_prior = ekf.prediction(dt)[0:3]
+                    #pose_prior = multi_res_localization[nb_resolution-1].pose
                 else:
                     pose_prior = multi_res_localization[res-1].pose                
                 ###### Scan matching ######
@@ -89,7 +94,12 @@ def main():
         ############# Trajectory ################
         pose = multi_res_localization[nb_resolution-1].pose
         traj.update(pose)
-
+        
+        ############# State Estimator ################
+        ekf.correction(pose)
+        previous_timestamp = timestamp
+        print(ekf.pose , ekf.vel)
+        print(pose)
         ########### Statistics ###########
         mapping_time = 0
         localization_time = 0

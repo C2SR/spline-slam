@@ -32,7 +32,7 @@ class Mapping:
         self.range_min = range_min 
         self.range_max = range_max
         self.angles = np.linspace(self.angle_min, self.angle_max, number_beams)
-        self.beam_samples = np.arange(self.range_min, self.range_max, 2*knot_interval).reshape([-1,1])       
+        self.beam_samples = np.arange(self.range_min, self.range_max, 3*knot_interval).reshape([-1,1])       
         # Storing beam samples in memory for speed up 
         self.beam_matrix_x = self.beam_samples.reshape(-1,1) * np.cos(self.angles)
         self.beam_matrix_y = self.beam_samples.reshape(-1,1) * np.sin(self.angles)    
@@ -108,7 +108,9 @@ class Mapping:
         c_index_free = self.map.compute_sparse_tensor_index(free_pts)
         c_index_occ = self.map.compute_sparse_tensor_index(occ_pts)
 
+        #tic = time.clock()
         B_occ, _, _ = self.map.compute_tensor_spline(occ_pts, ORDER=0x01)
+        #self.time[4] += time.clock() - tic
         s_est_occ_ant = np.sum(self.map.ctrl_pts[c_index_occ]*B_occ, axis=1)
 
         # Free space
@@ -124,7 +126,7 @@ class Mapping:
         np.add.at(self.map.ctrl_pts, c_index_occ, (B_occ.T*mag_occ).T)        
 
         # Clamping control points 
-        self.map.ctrl_pts[c_index_free] = np.maximum(np.minimum(self.map.ctrl_pts[c_index_free], self.logodd_max_occ), self.logodd_min_free)
+        self.map.ctrl_pts[c_index_occ] = np.maximum(np.minimum(self.map.ctrl_pts[c_index_occ], self.logodd_max_occ), self.logodd_min_free)
 
     """ Evaluata map """
     def evaluate_map(self, pts):

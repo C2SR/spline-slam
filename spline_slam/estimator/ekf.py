@@ -27,8 +27,9 @@ class EKF:
         #Fx[1,2], Fx[1,3], Fx[1,4] = dt*(c*vx - s*vy), dt*s, dt*c 
         #Fx[2,5] = dt
         Fw = np.zeros([6,3])
+        Fw[0,0] = Fw[1,1] = Fw[2,2] = .5*dt**2
         Fw[3,0] = Fw[4,1] = Fw[5,2] = dt
-        Q = 10*np.diag([vx**2, vy**2, w**2])
+        Q = np.diag([.1, .1, .05])
         self.Cov = Fx@self.Cov@Fx.T + Fw@Q@Fw.T
 
         return np.hstack([self.pose, self.vel])

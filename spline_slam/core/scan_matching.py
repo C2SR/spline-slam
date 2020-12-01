@@ -83,14 +83,14 @@ class ScanMatching:
     """ 
     Estimate pose via scan-matching (core function)
      """
-    def compute_pose(self, pose_prior, pts_occ_local, ftol=1e-3, max_nfev=15):
+    def compute_pose(self, pose_prior, pts_occ_local, ftol=1e-3, max_nfev=10):
         self.flag = False
 
         self.c_index_change = np.inf
         self.c_index = None
         self.h_occ = None
 
-        self.threshold_c_index = .1*16*pts_occ_local.shape[1]
+        self.threshold_c_index = .05*16*pts_occ_local.shape[1]
 
         res = least_squares(self.compute_cost_function, 
                             pose_prior,
