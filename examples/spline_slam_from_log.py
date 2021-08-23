@@ -21,14 +21,14 @@ def main():
     multi_res_localization = {}
     multi_res_mapping = {}
     multi_res_map = {}
-    nb_resolution = 3
+    nb_resolution = 2
     
     for res in range(0,nb_resolution):
         max_nb_rays = 360#*(res+1)
         kwargs_spline= {'knot_space': .05*((2.5)**(nb_resolution-res-1)), #2.5 
                         'surface_size': np.array([150.,150.]),
                         'angle_min': 0*np.pi/180., # -(130-5)*np.pi/180,
-                        'angle_max': 159*np.pi/180., #(129.75-5)*np.pi/180,
+                        'angle_max': 179*np.pi/180., #(129.75-5)*np.pi/180,
                         'number_beams': 360,
                         'range_min': 0.05,
                         'range_max': 49.9, #49.9, 
