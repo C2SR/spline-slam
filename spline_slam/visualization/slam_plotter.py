@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import numpy as np
 import threading
@@ -7,7 +9,7 @@ class SLAMPlotter(threading.Thread):
     def __init__(self, slam_map, traj, sensor, **kwargs):
         logodd_min_free = kwargs['logodd_min_free'] if 'logodd_min_free' in kwargs else -100
         logodd_max_occupied = kwargs['logodd_max_occupied'] if 'logodd_max_occupied' in kwargs else 100
-        sleep_time = kwargs['plot_sleep_time'] if 'plot_sleep_time' in kwargs else 15
+        sleep_time = kwargs['plot_sleep_time'] if 'plot_sleep_time' in kwargs else 10
 
         # SLAM
         self.slam_map = slam_map
@@ -42,8 +44,8 @@ class SLAMPlotter(threading.Thread):
         self.sensor = sensor
 
         dx, dy = .1, .1
-        #y, x = np.mgrid[-25:10+dy:dy, -15:25+dx:dx] # INTEL
-        y, x = np.mgrid[-10:6.5+dy:dy, -7.5:5+dx:dx] # INTEL
+        y, x = np.mgrid[-25:20+dy:dy, -15:25+dx:dx] # INTEL
+        #y, x = np.mgrid[-10:6.5+dy:dy, -7.5:5+dx:dx] # FEUP
         self.map_pts = np.vstack([x.flatten(), y.flatten()])
         self.map_grid_size = x.shape
         self.x = x
