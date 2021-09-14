@@ -74,7 +74,7 @@ def main():
         
         ########### Localization #############
         lidar.process_new_measurements(ranges)
-        for res in range(1, nb_resolution):
+        for res in range(0, nb_resolution):
             if num < 3:
                 odom, dt = odometry.pose_to_discrete_odometry(timestamp, pose) 
             else:
