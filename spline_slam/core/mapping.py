@@ -78,13 +78,13 @@ class Mapping:
         pts_free_local = sensor.get_free_pts()
  
          # Transforming metric coordinates from the local to the global frame
-        tic = time.clock()
+        tic = time.time()
         pts_occ = self.local_to_global_frame(pose,pts_occ_local)
         pts_free = self.local_to_global_frame(pose,pts_free_local)
-        self.time[3] += time.clock() - tic
+        self.time[3] += time.time() - tic
 
         # Update spline map
-        tic = time.clock()
+        tic = time.time()
         self.update_spline_map(pts_occ,  pts_free, pose)
-        self.time[4] += time.clock() - tic
+        self.time[4] += time.time() - tic
         
