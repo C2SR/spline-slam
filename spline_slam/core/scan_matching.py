@@ -111,7 +111,7 @@ class ScanMatching:
         pts_occ_local = sensor.get_occupied_pts()
 
         # Scan-matching
-        tic = time.clock()      
+        tic = time.time()      
         best_cost_estimate = np.inf
         # If odometry is poor search with different orientations
         if unreliable_odometry:
@@ -131,4 +131,4 @@ class ScanMatching:
            self.pose, _ = self.compute_pose(pose_self, pts_occ_local) 
 
 
-        self.time[2] += time.clock() - tic
+        self.time[2] += time.time() - tic
